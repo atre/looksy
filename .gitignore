@@ -1,0 +1,22 @@
+node_modules/
+dist/
+/tmp/
+.DS_Store
+*.tsbuildinfo
+*.png
+!assets/*.png
+*.jpg
+*.jpeg
+*.webm
+*.har
+
+# snuff run state
+.snuff/
+
+# Claude Code
+.claude/settings.local.json
+.claude/worktrees/
+CLAUDE.local.md
+
+# Local dogfooding log (references private projects) — triage into CHANGELOG, never commit
+FEEDBACK.md

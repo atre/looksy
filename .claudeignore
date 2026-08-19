@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+*.log
+README.md
+package-lock.json
+
+# Large reference docs — load explicitly when needed
+ARCHITECTURE.md
+
+# Test files — not needed during source-only sessions
+tests/

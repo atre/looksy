@@ -1,0 +1,65 @@
+{
+  "name": "looksy",
+  "version": "0.2.0",
+  "description": "Screenshot any URL from the command line. Built for AI-assisted visual development.",
+  "type": "module",
+  "bin": {
+    "looksy": "./bin/looksy.js"
+  },
+  "main": "./dist/screenshot.js",
+  "exports": {
+    ".": "./dist/screenshot.js",
+    "./cli": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "pretest": "tsc",
+    "prepare": "tsc",
+    "postinstall": "node -e \"try{require('child_process').execSync('npx playwright install chromium',{stdio:'inherit'})}catch{console.error('looksy: Chromium download failed — captures will not work until you run: npx playwright install chromium')}\""
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "keywords": [
+    "screenshot",
+    "cli",
+    "playwright",
+    "preview",
+    "ai",
+    "visual-regression",
+    "accessibility",
+    "wcag",
+    "contrast",
+    "mcp",
+    "claude"
+  ],
+  "license": "MIT",
+  "author": "Mykyta Herashchenko",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/atre/looksy.git"
+  },
+  "homepage": "https://github.com/atre/looksy#readme",
+  "bugs": {
+    "url": "https://github.com/atre/looksy/issues"
+  },
+  "engines": {
+    "node": ">=18.3.0"
+  },
+  "dependencies": {
+    "playwright": "^1.50.0",
+    "pngjs": "^7.0.0"
+  },
+  "optionalDependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.0",
+    "@types/pngjs": "^6.0.5",
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
+  }
+}
