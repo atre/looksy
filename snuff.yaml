@@ -1,0 +1,6 @@
+# snuff manifest — definition-of-done gates. Run `snuff` to execute all.
+gates:
+  - name: test
+    run: npm test
+  - name: build
+    run: npm run build
