@@ -41,6 +41,7 @@ Capture options:
   --max-height <n>       Cap full-page capture height (use with --full)
   --width <n>            Custom viewport width
   --height <n>           Custom viewport height
+  --viewport <WxH>       Width x height in one flag (e.g. 390x844); not with --width/--height/--mobile/--tablet
   --selector <css>       Screenshot specific element
   --all                  With --selector: screenshot every matching element
   --multi                Desktop + mobile screenshots
@@ -112,7 +113,8 @@ Token-saving:
                            no <pattern> · visible <css> · hidden <css>
                            font:<css>=<family> · bg:<css>=<hex> · color:<css>=<hex>
                            contrast:aa · contrast:aaa · no-hscroll · touch-targets[:N]
-                           h1-count[:N] · heading-outline · no-broken-images · alt-text
+                           h1-count[:N] · heading-outline · no-broken-images · status:<code>
+                           assets-ok · alt-text
                            lang · canonical · meta-description · og-image · og-title
                            og-tags · twitter-card · no generator · translated
                            self-hosted-fonts · no-google-fonts · unique-footer · unique-nav
@@ -120,6 +122,7 @@ Token-saving:
   -q, --quiet            No output-path lines — Page line, analyzer summaries, checks only
   --brief                ≤10-line red-only summary for gate/hook use (implies -q)
   --fail-only            fleet/pages/urls: print only red pages, plus a trailing "N clean" line
+  --no-fail-only         fleet --design-audit turns --fail-only on by default; this keeps every page in the output
 
 Capture modes:
   --sweep                Screenshot at 5 responsive breakpoints (320-1440px)
@@ -137,6 +140,7 @@ Auth & consent:
   --local-storage <kv>   Seed localStorage before load (e.g. "cmp_consent=1; theme=dark")
   --dismiss-consent      Click a known cookie/consent accept control after load (OneTrust,
                          Cookiebot, Usercentrics, Didomi, CookieYes, …) or hide the CMP overlay
+  --consent-selector <css> Click this accept control first (implies --dismiss-consent); heuristics as fallback
   --storage-state <path> Playwright storage state JSON file
   --basic-auth <u:p>     Basic auth credentials (user:password)
 
@@ -193,5 +197,5 @@ Advanced:
   -h, --help             Show this help
 
 Environment:
-  LOOKSY_DIR             Base directory (default: /tmp/looksy). Use for persistent baselines in CI.`);
+  LOOKSY_DIR             Base directory (default: ~/.looksy). Use for persistent baselines in CI.`);
 }

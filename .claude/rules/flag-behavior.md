@@ -97,6 +97,7 @@ Complete specification of all CLI flag behaviors, assertion grammars, and output
 - `--pages`/`--urls`/`--url-file`/fleet only: skips the full per-page `printResult` body (Page line, analyzer summaries, checks, suggestions, …) for clean targets — red targets (same redness definition as `--brief`: HTTP ≥ 400, hscroll, AA contrast fail, `--check` fail, or capture error) print in full, exactly as today
 - The closing `--- Batch: N … ---` table follows the same rule: only red entries' two-line blocks print, plus a trailing `  N clean` line — always present, even when every entry is clean (`N clean` with nothing above it) or every entry is red (`0 clean`), so the run's completion is never ambiguous
 - `--brief` takes precedence when both are passed: `--brief` already replaces all normal output with its own red-only summary, so `--fail-only` has no additional effect in that mode
+- `fleet … --design-audit` defaults it on (audit runs are read for reds); `--no-fail-only` opts out; single-URL/`--pages` runs unaffected
 
 **--limit N|all**
 - Max offenders listed per section (default 10; 5 in compact touch-target lists): responsive touch targets, uncompressed resources, no-cache resources, large bundles, image-issue files
@@ -106,7 +107,7 @@ Complete specification of all CLI flag behaviors, assertion grammars, and output
 - Directory for batch output (all files go here)
 
 **LOOKSY_DIR=./custom looksy <url>**
-- Custom base directory (default: /tmp/looksy)
+- Custom base directory (default: ~/.looksy)
 - Security: created with mode 0o700
 
 ### Interactions & Injection
@@ -429,7 +430,7 @@ Each active analyzer also echoes a one-line summary to stdout (in addition to th
 - PDF export / video (3s) / HAR export
 
 **--history**
-- Save to timestamped timeline (/tmp/looksy/history/<slug>/<timestamp>.png)
+- Save to timestamped timeline (~/.looksy/history/<slug>/<timestamp>.png)
 
 ### Fingerprinting & Anti-Fingerprint
 
@@ -491,6 +492,8 @@ Grammar (comma-separated):
 - `h1-count[:N]` — exactly N `<h1>` (default 1), display:none/aria-hidden ignored; lists the h1 texts
 - `heading-outline` — no skipped levels among screen-reader-visible headings; names both headings per skip
 - `no-broken-images` — no `<img>` whose load finished with `naturalWidth === 0`; not-yet-loaded lazy images are not broken
+- `status:<code>` — main document HTTP status equals `<code>`
+- `assets-ok` — no same-origin css/js/img/font request failed or returned ≥ 400
 - `alt-text` — every `<img>` has an `alt` attribute (lists the first 5 without)
 - `lang` / `canonical` / `meta-description` — presence checks
 - `og-image` / `og-title` / `og-tags` (title+description+image) / `twitter-card` — social meta presence
@@ -557,6 +560,9 @@ Grammar (comma-separated):
 - Best-effort, never fails the capture; also runs in each `--responsive-check` breakpoint context
 - Cheapest lever is still the site's own consent state: `--cookie` / `--local-storage` with the CMP's key
 
+**--consent-selector "#accept-all"**
+- Tried first: `page.locator(sel).first().click({ timeout: 2000 })`. On a miss, falls through to the `--dismiss-consent` heuristics above. Implies `--dismiss-consent`
+
 **--storage-state ./auth.json**
 - Use Playwright storage state file
 
@@ -588,7 +594,7 @@ Gate it in CI with `--check "no-hscroll"`.
 | `--filmstrip` | `preview-filmstrip.png` |
 | `--pdf` / `--har` | `preview.pdf` / `preview.har` |
 | `--record` | `preview.webm` |
-| `--history` | `/tmp/looksy/history/<slug>/<timestamp>.png` |
+| `--history` | `~/.looksy/history/<slug>/<timestamp>.png` |
 | `-o path` | wherever you specify |
 | `--urls` batch | `preview-example-com.png`, `preview-other-com-pricing.png` |
 

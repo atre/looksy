@@ -38,6 +38,12 @@ import { summarize } from './analysis-summary.js';
 import { buildSuggestInput } from './screenshot-suggest.js';
 import { captureMainScreenshot } from './screenshot-capture.js';
 import { prepareContext, dismissConsent } from './page-prep.js';
+import {
+  isTrackedAssetType,
+  isSameOrigin,
+  classifyBrokenImage,
+  type FailedRequest,
+} from './failed-requests.js';
 import { toFindings } from './findings.js';
 import { thumbDimensions } from './cli-utils.js';
 
@@ -173,11 +179,40 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
       }
     });
 
+    const failedRequests: FailedRequest[] = [];
+    // Chromium fires both 'response' (with a >=400 status) and 'requestfailed' (ERR_ABORTED)
+    // for the same URL when e.g. a <link rel=stylesheet> 404s — dedupe by URL, first wins.
+    page.on('requestfailed', (req) => {
+      if (
+        isTrackedAssetType(req.resourceType()) &&
+        isSameOrigin(req.url(), config.url) &&
+        !failedRequests.some((f) => f.url === req.url())
+      ) {
+        failedRequests.push({
+          url: req.url(),
+          error: req.failure()?.errorText ?? 'failed',
+          type: req.resourceType(),
+        });
+      }
+    });
+    page.on('response', (resp) => {
+      const req = resp.request();
+      if (
+        resp.status() >= 400 &&
+        isTrackedAssetType(req.resourceType()) &&
+        isSameOrigin(resp.url(), config.url) &&
+        !failedRequests.some((f) => f.url === resp.url())
+      ) {
+        failedRequests.push({ url: resp.url(), status: resp.status(), type: req.resourceType() });
+      }
+    });
+
     const { response, idleTimedOut } = await navigateSafe(page, config.url, {
       timeout: config.timeout,
       errors: consoleErrors,
     });
 
+    const mainStatus = response ? response.status() : undefined;
     let httpStatus: number | undefined;
     if (response) {
       const status = response.status();
@@ -194,7 +229,11 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
 
     // --dismiss-consent: click/hide the CMP banner before anything measures or captures the page.
     if (config.dismissConsent) {
-      const outcome = await safeRun(() => dismissConsent(page), consoleErrors, 'Consent');
+      const outcome = await safeRun(
+        () => dismissConsent(page, { selector: config.consentSelector }),
+        consoleErrors,
+        'Consent',
+      );
       result_consent = outcome ?? { action: 'none' };
     }
 
@@ -298,9 +337,11 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
     if (result_consent) result.consentDismissed = result_consent;
     if (httpStatus !== undefined) result.httpStatus = httpStatus;
     if (idleTimedOut) result.networkIdleTimeout = true;
+    if (failedRequests.length) result.failedRequests = failedRequests;
     // jsonData is the in-memory bus between analyzers and --suggest/--budget; without it,
     // --design's suggestions silently saw only contrast pairs unless --json was also on.
     if (config.json || config.suggest || config.budget) result.jsonData = {};
+    if (result.jsonData && failedRequests.length) result.jsonData.failedRequests = failedRequests;
     const compact = config.compact ?? false;
 
     const visualFlags =
@@ -431,7 +472,12 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
     }
     if (config.check) {
       const cr = await safeRun(
-        () => runChecksStructured(page, config.check!, { contrastLimit: config.contrastLimit }),
+        () =>
+          runChecksStructured(page, config.check!, {
+            contrastLimit: config.contrastLimit,
+            httpStatus: mainStatus,
+            failedRequests,
+          }),
         consoleErrors,
         'Check',
       );
@@ -528,6 +574,9 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
         const text = await safeRun(
           async () => {
             const metadata = await extractMetadata(page);
+            for (const im of metadata.images) {
+              if (im.broken) im.loadStatus = classifyBrokenImage(im.src, failedRequests);
+            }
             metadata.viewport = { width: config.width, height: config.height };
             metadata.consoleErrors = consoleErrors;
             if (result.jsonData) result.jsonData.metadata = metadata;

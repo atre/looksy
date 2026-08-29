@@ -1,6 +1,7 @@
 import type { ScreenshotResult } from './screenshot.js';
 import type { CheckResult } from './check.js';
 import { formatIdleTimeoutNote } from './navigate.js';
+import { formatFailedRequests } from './failed-requests.js';
 
 /** Check contrast results: print failing elements to stderr and exit with code 1 if triggered */
 export function checkContrastExit(
@@ -73,6 +74,7 @@ export function printResult(result: ScreenshotResult, opts: PrintOptions = {}): 
   const checksOnly = quiet && !!result.checkResults;
   const pageLine = formatPageLine(result);
   if (pageLine) console.log(pageLine);
+  if (result.failedRequests?.length) console.log(formatFailedRequests(result.failedRequests));
   if (result.pageInfo?.overflowCulprits) {
     for (const c of result.pageInfo.overflowCulprits) {
       console.log(`  overflow: ${c.tag} right=${c.right}px "${c.text}"`);

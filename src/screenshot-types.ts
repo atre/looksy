@@ -42,6 +42,8 @@ export interface ScreenshotConfig {
   localStorage?: string;
   /** --dismiss-consent — click/hide cookie & consent banners after load. */
   dismissConsent?: boolean;
+  /** --consent-selector — CSS selector tried first, before the --dismiss-consent heuristics. */
+  consentSelector?: string;
   storageState?: string;
   basicAuth?: string;
   cssVars?: boolean;
@@ -152,6 +154,8 @@ export interface ScreenshotResult {
   jsonPath?: string;
   /** HTTP status of the main document when it was an error (>= 400). */
   httpStatus?: number;
+  /** Same-origin css/js/img/font requests that failed or returned >= 400. */
+  failedRequests?: import('./failed-requests.js').FailedRequest[];
   /** True when navigation's networkidle wait hit the NETWORK_IDLE_TIMEOUT_MS cap (navigate.ts)
    *  — a third-party embed (chat widget, ads, analytics beacon) kept the network busy forever,
    *  so looksy proceeded via domcontentloaded instead of waiting out the full --timeout.

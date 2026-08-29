@@ -16,6 +16,7 @@ export interface PageMetadata {
     className?: string;
     broken: boolean;
     pending?: boolean;
+    loadStatus?: { kind: 'failed' | 'blocked'; reason: string };
     naturalWidth: number;
     naturalHeight: number;
     displayWidth: number;
@@ -421,7 +422,7 @@ export function formatMetadata(meta: PageMetadata, opts: FormatOptions = {}): st
   }
 
   // Heading hierarchy
-  if (meta.headings.length > 0) {
+  if (meta.headings?.length > 0) {
     lines.push('## Heading Hierarchy');
     for (const h of meta.headings) {
       lines.push(`${'  '.repeat(h.level - 1)}- H${h.level}: ${h.text}`);
@@ -430,7 +431,7 @@ export function formatMetadata(meta: PageMetadata, opts: FormatOptions = {}): st
   }
 
   // Color palette
-  if (meta.colors.length > 0) {
+  if (meta.colors?.length > 0) {
     if (compact) {
       // Convert rgb() to hex, group by role, limit to top 8
       const toHex = (rgb: string) => {
@@ -502,7 +503,9 @@ export function formatMetadata(meta: PageMetadata, opts: FormatOptions = {}): st
   if (broken.length > 0) {
     lines.push('## Broken Images');
     for (const img of broken) {
-      lines.push(`- ${img.src} (alt: "${img.alt}")`);
+      lines.push(
+        `- ${img.src} (alt: "${img.alt}")${img.loadStatus ? ` — ${img.loadStatus.reason}` : ''}`,
+      );
     }
     lines.push('');
   }
@@ -520,7 +523,7 @@ export function formatMetadata(meta: PageMetadata, opts: FormatOptions = {}): st
       for (const img of oversized) {
         const ratio = (img.naturalWidth / Math.max(img.displayWidth, 1)).toFixed(1);
         lines.push(
-          `- ${img.src.split('/').pop()?.split('?')[0] || 'image'}: ${img.naturalWidth}x${img.naturalHeight} displayed at ${img.displayWidth}x${img.displayHeight} (${ratio}x oversized)`,
+          `- ${img.src}: ${img.naturalWidth}x${img.naturalHeight} displayed at ${img.displayWidth}x${img.displayHeight} (${ratio}x oversized)`,
         );
       }
     }

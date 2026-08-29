@@ -37,7 +37,10 @@ export interface BatchReportRow {
  * Extract batch report data from a ScreenshotResult's jsonData.
  * Only populates columns for analysis that was actually run.
  */
-export function extractBatchRow(url: string, result: import('./screenshot.js').ScreenshotResult): BatchReportRow {
+export function extractBatchRow(
+  url: string,
+  result: import('./screenshot.js').ScreenshotResult,
+): BatchReportRow {
   const row: BatchReportRow = { url };
   const data = result.jsonData ?? {};
 
@@ -111,10 +114,11 @@ export function extractBatchRow(url: string, result: import('./screenshot.js').S
   // Responsive check (jsonData.responsiveCheck is ResponsiveCheckResult)
   if (data.responsiveCheck) {
     const rc = data.responsiveCheck;
-    const allTargets = rc.breakpoints?.reduce((sum: number, bp: any) => {
-      const nonExempt = (bp.touchTargetDetails || []).filter((t: any) => !t.inlineExempt);
-      return sum + nonExempt.length;
-    }, 0) ?? 0;
+    const allTargets =
+      rc.breakpoints?.reduce((sum: number, bp: any) => {
+        const nonExempt = (bp.touchTargetDetails || []).filter((t: any) => !t.inlineExempt);
+        return sum + nonExempt.length;
+      }, 0) ?? 0;
     row.touchTargetFails = allTargets;
     row.hasOverflow = rc.breakpoints?.some((bp: any) => bp.hasHorizontalOverflow) ?? false;
   }
@@ -166,7 +170,9 @@ export function formatBatchReport(rows: BatchReportRow[], opts: { baseUrl?: stri
         if (full.hostname === base.hostname) {
           displayUrl = full.pathname + (full.search || '');
         }
-      } catch { /* keep full url */ }
+      } catch {
+        /* keep full url */
+      }
     }
 
     const cols: string[] = [displayUrl];
@@ -196,7 +202,7 @@ export function formatBatchReport(rows: BatchReportRow[], opts: { baseUrl?: stri
     if (hasFonts) {
       if (r.fontStatus === undefined) cols.push('—');
       else if (r.fontStatus === 'self-hosted') cols.push('self-hosted');
-      else if (r.fontStatus === 'none') cols.push('none detected');
+      else if (r.fontStatus === 'none') cols.push('system stack');
       else cols.push(`external: ${(r.externalFontDomains || []).join(', ')}`);
     }
     if (hasCwv) cols.push(r.cwvSummary ?? '—');
@@ -223,7 +229,9 @@ export function formatBatchReport(rows: BatchReportRow[], opts: { baseUrl?: stri
     summaryParts.push(`${total - aaFail}/${total} contrast AA pass`);
   }
   if (hasResponsive) {
-    const touchFail = rows.filter((r) => r.touchTargetFails !== undefined && r.touchTargetFails > 0).length;
+    const touchFail = rows.filter(
+      (r) => r.touchTargetFails !== undefined && r.touchTargetFails > 0,
+    ).length;
     if (touchFail > 0) summaryParts.push(`${touchFail} page(s) with touch target issues`);
     else summaryParts.push('all touch targets pass');
     const overflowCount = rows.filter((r) => r.hasOverflow === true).length;

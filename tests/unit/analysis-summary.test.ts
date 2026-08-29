@@ -130,7 +130,7 @@ describe('summarize', () => {
       { family: 'Inter', weight: '700', style: 'normal', status: 'loaded' },
     ];
     expect(summarize('fonts', fonts)).toBe('fonts: 2 (Inter)');
-    expect(summarize('fonts', [])).toBe('fonts: none detected');
+    expect(summarize('fonts', [])).toBe('fonts: system stack (none loaded)');
   });
 
   it('summarizes broken and unverifiable links', () => {

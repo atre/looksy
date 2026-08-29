@@ -108,10 +108,14 @@ export function resolveOutputTarget(output: string | undefined): { dir?: string;
   return { file: output };
 }
 
-/** Slug a URL for --urls/fleet batch output: https://a.com/de/ → a-com-de */
+/** Slug a URL for --urls/fleet batch output: https://a.com/de/ → a-com-de; http://localhost:4321/de/ → localhost-4321-de */
 export function urlToOutputSuffix(pageUrl: string): string {
   const parsed = new URL(pageUrl);
-  const hostPart = parsed.hostname.replace(/\./g, '-');
+  const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
+  const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+  const hostPart = LOOPBACK.has(parsed.hostname)
+    ? `${parsed.hostname.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')}-${port}`
+    : parsed.hostname.replace(/\./g, '-');
   const pathPart =
     parsed.pathname === '/'
       ? ''
@@ -125,6 +129,29 @@ export function applySuffix(path: string, suffix: string | undefined): string {
   if (!suffix) return path;
   const safe = suffix.replace(/[^a-zA-Z0-9_-]/g, '-');
   return path.replace(/(\.(png|jpg|jpeg|pdf|webm))$/, `-${safe}$1`);
+}
+
+/** Resolve --dismiss-consent / --consent-selector into a single mode: selector implies dismiss. */
+export function resolveConsentMode(values: Record<string, any>): {
+  dismiss: boolean;
+  selector: string | undefined;
+} {
+  const selector = values['consent-selector'] ? String(values['consent-selector']) : undefined;
+  return { dismiss: Boolean(values['dismiss-consent']) || selector !== undefined, selector };
+}
+
+/** fleet --design-audit defaults --fail-only on (audit runs are read for reds); --no-fail-only opts out. */
+export function applyFleetDefaults(values: Record<string, any>): void {
+  if (values['design-audit'] && !values['no-fail-only']) values['fail-only'] = true;
+}
+
+/** `diff` subcommand output paths: -o names the capture, diff image gets a -diff suffix beside it. */
+export function diffOutputPaths(
+  output: string | undefined,
+  baseDir: string,
+): { capture: string; diff: string } {
+  if (!output) return { capture: `${baseDir}/preview.png`, diff: `${baseDir}/diff.png` };
+  return { capture: output, diff: applySuffix(output, 'diff') };
 }
 
 /**
@@ -220,10 +247,26 @@ export function configureFleet(fleetUrls: string[], values: Record<string, any>)
   return all;
 }
 
+export function parseViewport(raw: string): { width: number; height: number } {
+  const m = /^(\d+)x(\d+)$/.exec(raw.trim());
+  if (!m)
+    throw new Error(`--viewport must be "<width>x<height>" of positive integers, got "${raw}"`);
+  const width = Number(m[1]);
+  const height = Number(m[2]);
+  if (width < 1 || height < 1) throw new Error(`--viewport width/height must be ≥ 1, got "${raw}"`);
+  return { width, height };
+}
+
 export function resolveViewport(values: Record<string, any>): {
   width: number;
   height: number;
 } {
+  if (values.viewport) {
+    if (values.width || values.height || values.mobile || values.tablet) {
+      throw new Error('--viewport cannot be combined with --width/--height/--mobile/--tablet');
+    }
+    return parseViewport(String(values.viewport));
+  }
   let vp = viewports.desktop;
   if (values.mobile) vp = viewports.mobile;
   if (values.tablet) vp = viewports.tablet;

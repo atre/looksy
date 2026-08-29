@@ -79,6 +79,8 @@ export interface ResponsiveCheckOptions {
   localStorage?: string;
   /** --dismiss-consent: dismiss CMP banners in each breakpoint context too. */
   dismissConsent?: boolean;
+  /** --consent-selector: tried first, before the dismissConsent heuristics. */
+  consentSelector?: string;
 }
 
 const BREAKPOINTS = [
@@ -106,6 +108,7 @@ export async function runResponsiveCheck(
     cookie: opts?.cookie,
     localStorage: opts?.localStorage,
     dismissConsent: opts?.dismissConsent,
+    consentSelector: opts?.consentSelector,
   };
   // No browser passed in → acquire one via withBrowser, which always releases it (a
   // connected --serve browser must be disconnected too, or the CLI never exits).
@@ -134,7 +137,7 @@ export async function runResponsiveCheck(
 
         try {
           await navigateSafe(page, url, { timeout: navTimeout });
-          if (prep.dismissConsent) await dismissConsent(page);
+          if (prep.dismissConsent) await dismissConsent(page, { selector: prep.consentSelector });
 
           const checkTouchTargets = bp.width <= 768;
           const checkTinyText = bp.width <= 375;

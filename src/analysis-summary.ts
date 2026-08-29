@@ -44,7 +44,7 @@ export function summarize(key: string, data: any, opts?: { limit?: number }): st
     case 'cssVars':
       return `css-vars: ${data.length} custom propert${data.length === 1 ? 'y' : 'ies'}`;
     case 'fonts': {
-      if (data.length === 0) return 'fonts: none detected';
+      if (data.length === 0) return 'fonts: system stack (none loaded)';
       const families = [...new Set(data.map((f: any) => f.family))];
       return `fonts: ${data.length} (${families.slice(0, 4).join(', ')}${families.length > 4 ? ', …' : ''})`;
     }

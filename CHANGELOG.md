@@ -11,6 +11,14 @@ All notable changes to looksy are documented here. Format follows [Keep a Change
 - `--thumb <w>` — small JPEG (q60) sibling of the full-res capture for cheap AI reads
 - `--crop x,y,w,h` — exact pixel-region capture (Playwright clip), overrides the `--max-height` auto-crop
 - `findings[]` entries carry `scope: 'site'` (mirrors pulse's Finding) and a descriptive `title` (`no-hscroll: +174px at 375px`, `contrast: 2 AA fail`) instead of a bare `1 check fail` count
+- `--viewport WxH` — width x height in one flag (e.g. `--viewport 390x844`); errors if combined with `--width`/`--height`/`--mobile`/`--tablet`
+- `--consent-selector <css>` — click this accept control first (implies `--dismiss-consent`); falls back to the existing heuristics on a miss
+- `--no-fail-only` — opt out of `fleet --design-audit`'s new `--fail-only` default
+- `--check "status:<code>"` / `"assets-ok"` — main-document HTTP status equality, and a gate on same-origin css/js/img/font requests that failed or returned ≥ 400
+- Failed same-origin asset requests print a `⚠ N asset(s) failed (first: <url> — <status|error>)` line after the Page line and land in the JSON sidecar as `failedRequests[]`
+- Broken `<img>` entries in `## Broken Images` are labeled `blocked (CSP or ad-blocker?)` vs the actual failure reason (status/error text), and `--suggest` splits blocked-by-CSP images out of the broken-image count
+- `diff <url> <name>` prints a `baseline saved YYYY-MM-DD HH:MM (Nd/Nh ago)` line
+- `--urls`/fleet filenames for loopback hosts (`localhost`, `127.0.0.1`, `[::1]`) now carry the port (`preview-localhost-4321-de.png`) so two local apps on different ports don't collide
 
 ### Fixed
 
@@ -20,6 +28,11 @@ All notable changes to looksy are documented here. Format follows [Keep a Change
 ### Changed
 
 - `visual-qa` skill moved into the repo (`skills/visual-qa/SKILL.md`), `~/.claude/skills/visual-qa` now symlinks to it like the other tools
+- `fonts: none detected` → `fonts: system stack (none loaded)` — an empty `document.fonts` set means no `@font-face` was declared, not that something's missing; batch-report column changes from `none detected` to `system stack`
+- `LOOKSY_DIR` default `/tmp/looksy` → `~/.looksy` (survives reboot); `list`/`save`/`diff` print a stderr hint when legacy baselines are found under the old path and none exist yet under the new one
+- `diff <url> <name> -o <path>` now names the saved capture instead of the diff image; the diff image lands at `<path>-diff.png` beside it
+- `fleet … --design-audit` now defaults `--fail-only` on (opt out with `--no-fail-only`)
+- Broken/oversized/missing-alt image names in `--suggest`, the oversized-image hint, and `--check "no-broken-images"` are now the full `src` instead of a truncated basename
 
 ## [0.2.0] — 2026-08-17
 

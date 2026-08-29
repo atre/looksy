@@ -54,7 +54,7 @@ describe('buildSuggestInput: alt="" is not missing alt', () => {
     };
     const input = buildSuggestInput(jsonData, undefined);
     expect(input.missingAlt).toBe(1);
-    expect(input.missingAltSrcs).toEqual(['logo.svg']);
+    expect(input.missingAltSrcs).toEqual(['/logo.svg']);
   });
 
   it('falls back to id/class selector when src is data: or empty', () => {

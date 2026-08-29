@@ -18,6 +18,8 @@ export interface PagePrepOptions {
   localStorage?: string;
   /** Click a known consent-accept control after load and hide known CMP containers. */
   dismissConsent?: boolean;
+  /** CSS selector tried first, before the dismissConsent heuristics. */
+  consentSelector?: string;
 }
 
 /** Parse "a=1; b=2" (also accepts newline-separated) into ordered pairs. Values may contain '='. */
@@ -203,8 +205,7 @@ async function clickAcceptIn(
     }) => {
       const isVisible = (el: Element): boolean => {
         const cs = getComputedStyle(el);
-        if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0')
-          return false;
+        if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return false;
         const r = el.getBoundingClientRect();
         return r.width > 0 && r.height > 0;
       };
@@ -277,8 +278,20 @@ async function clickAcceptIn(
  * shadow roots), else a visible button whose text is an accept phrase, else hide known
  * CMP containers via CSS. Best-effort, never throws.
  */
-export async function dismissConsent(page: Page): Promise<ConsentDismissResult> {
+export async function dismissConsent(
+  page: Page,
+  opts: { selector?: string } = {},
+): Promise<ConsentDismissResult> {
   try {
+    if (opts.selector) {
+      try {
+        await page.locator(opts.selector).first().click({ timeout: 2000 });
+        return { action: 'clicked', target: opts.selector };
+      } catch {
+        /* fall through to heuristics */
+      }
+    }
+
     let clicked: string | null = await clickAcceptIn(page.mainFrame(), { inChildFrame: false });
 
     // iframe-hosted notices (Sourcepoint, Quantcast, …): the wall lives in a child frame that

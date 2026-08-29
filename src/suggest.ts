@@ -7,6 +7,8 @@ export interface SuggestInput {
   brokenImages?: number;
   /** Filenames/srcs of the broken images (first few) — so the finding names the element. */
   brokenImageSrcs?: string[];
+  blockedImages?: number;
+  blockedImageSrcs?: string[];
   brokenLinks?: Array<{ url: string; status: string }>;
   missingAlt?: number;
   /** Filenames/srcs of images with no `alt` attribute at all (first few) — `alt=""` is decorative
@@ -192,7 +194,16 @@ export function formatSuggestions(data: SuggestInput, opts: { compact?: boolean 
     suggestions.push({
       priority: 'HIGH',
       category: 'images',
-      suggestion: `${data.brokenImages} broken image${data.brokenImages > 1 ? 's' : ''}${listNames(data.brokenImageSrcs)} — check src paths and ensure assets are deployed`,
+      suggestion: `${data.brokenImages} broken image${data.brokenImages > 1 ? 's' : ''}${listNames(data.brokenImageSrcs, 3)} — check src paths and ensure assets are deployed`,
+    });
+  }
+
+  // HIGH: Blocked images (CSP/ad-blocker)
+  if (data.blockedImages && data.blockedImages > 0) {
+    suggestions.push({
+      priority: 'HIGH',
+      category: 'images',
+      suggestion: `${data.blockedImages} image${data.blockedImages > 1 ? 's' : ''} blocked by CSP/ad-blocker${listNames(data.blockedImageSrcs, 3)} — check Content-Security-Policy img-src`,
     });
   }
 

@@ -1,5 +1,32 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+
 /** Base directory — configurable via LOOKSY_DIR env var for persistent baselines in CI. */
-export const LOOKSY_DIR = process.env.LOOKSY_DIR || '/tmp/looksy';
+export function defaultLooksyDir(env: NodeJS.ProcessEnv, home: string): string {
+  return env.LOOKSY_DIR || join(home, '.looksy');
+}
+export const LOOKSY_DIR = defaultLooksyDir(process.env, homedir());
+export const LEGACY_LOOKSY_DIR = '/tmp/looksy';
+
+/** Hint text for legacy baselines left behind by the old default dir, or undefined when no hint applies. */
+export function legacyBaselinesHint(s: {
+  envSet: boolean;
+  legacyHasBaselines: boolean;
+  currentHasBaselines: boolean;
+}): string | undefined {
+  if (s.envSet || !s.legacyHasBaselines || s.currentHasBaselines) return undefined;
+  return `baselines found in ${LEGACY_LOOKSY_DIR} — move them to ~/.looksy (default changed 2026-08-30)`;
+}
+
+/** Same as legacyBaselinesHint but reads current disk/env state. */
+export function legacyBaselinesHintFromDisk(): string | undefined {
+  return legacyBaselinesHint({
+    envSet: !!process.env.LOOKSY_DIR,
+    legacyHasBaselines: existsSync(join(LEGACY_LOOKSY_DIR, 'baselines')),
+    currentHasBaselines: existsSync(join(LOOKSY_DIR, 'baselines')),
+  });
+}
 
 /** Format byte counts as human-readable strings. */
 export function formatBytes(bytes: number): string {

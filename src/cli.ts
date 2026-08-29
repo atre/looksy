@@ -40,6 +40,8 @@ import {
   urlToOutputSuffix,
   assertNotBothAndDark,
   parseCrop,
+  applyFleetDefaults,
+  resolveConsentMode,
 } from './cli-utils.js';
 
 // Re-exported for external consumers (tests import from dist/cli.js)
@@ -70,6 +72,7 @@ async function main(): Promise<void> {
       full: { type: 'boolean', default: false },
       width: { type: 'string' },
       height: { type: 'string' },
+      viewport: { type: 'string' },
       thumb: { type: 'string' },
       crop: { type: 'string' },
       selector: { type: 'string' },
@@ -117,9 +120,11 @@ async function main(): Promise<void> {
       cookie: { type: 'string' },
       'local-storage': { type: 'string' },
       'dismiss-consent': { type: 'boolean', default: false },
+      'consent-selector': { type: 'string' },
       quiet: { type: 'boolean', short: 'q', default: false },
       brief: { type: 'boolean', default: false },
       'fail-only': { type: 'boolean', default: false },
+      'no-fail-only': { type: 'boolean', default: false },
       limit: { type: 'string' },
       'text-on': { type: 'string' },
       'bg-tokens': { type: 'string' },
@@ -256,6 +261,7 @@ async function main(): Promise<void> {
     }
     const all = configureFleet(fleetUrls, values);
     applyCompoundFlags(values);
+    applyFleetDefaults(values);
     const firstUrl = all[0] ? resolveUrl(all[0]) : 'http://localhost';
     await runCaptureFlow(values, firstUrl, null);
     return;
@@ -489,7 +495,9 @@ async function runCaptureFlow(
   const schema = values.schema ?? false;
   const cookie = values.cookie;
   const localStorage = values['local-storage'];
-  const dismissConsent = values['dismiss-consent'] ?? false;
+  const consent = resolveConsentMode(values);
+  const dismissConsent = consent.dismiss;
+  const consentSelector = consent.selector;
   // --limit all → no cap
   const listLimit = values.limit
     ? values.limit === 'all'
@@ -603,6 +611,7 @@ async function runCaptureFlow(
     cookie,
     localStorage,
     dismissConsent,
+    consentSelector,
     listLimit,
     metaMd,
     brief: values.brief ?? false,
@@ -793,6 +802,7 @@ async function runCaptureFlow(
         cookie,
         localStorage,
         dismissConsent,
+        consentSelector,
         timeout,
       });
       console.log(formatResponsiveCheck(result, { compact, limit: listLimit }));

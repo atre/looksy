@@ -48,9 +48,12 @@ export function buildSuggestInput(
       if (img.className) return `img.${img.className}`;
       return 'img';
     }
-    return src.split('/').pop()?.split('?')[0]?.slice(0, 40) || src.slice(0, 40);
+    return src;
   };
-  const brokenList = meta?.images?.filter((img) => img.broken) ?? [];
+  const blockedList =
+    meta?.images?.filter((img) => img.broken && img.loadStatus?.kind === 'blocked') ?? [];
+  const brokenList =
+    meta?.images?.filter((img) => img.broken && img.loadStatus?.kind !== 'blocked') ?? [];
   const missingAltList = meta?.images?.filter((img) => !img.hasAlt && !img.broken) ?? [];
   const brokenImgs = brokenList.length;
   const missingAlt = missingAltList.length;
@@ -74,7 +77,9 @@ export function buildSuggestInput(
     a11yIssues: a11y?.issues,
     seoIssues: seoIssues.length > 0 ? seoIssues : undefined,
     brokenImages: brokenImgs > 0 ? brokenImgs : undefined,
-    brokenImageSrcs: brokenImgs > 0 ? brokenList.map((i) => shortName(i)) : undefined,
+    brokenImageSrcs: brokenImgs > 0 ? brokenList.slice(0, 3).map((i) => shortName(i)) : undefined,
+    blockedImages: blockedList.length || undefined,
+    blockedImageSrcs: blockedList.length ? blockedList.slice(0, 3).map(shortName) : undefined,
     brokenLinks: links
       ?.filter((l) => l.verdict === 'broken')
       .map((l) => ({ url: l.url, status: l.error ?? String(l.status) })),

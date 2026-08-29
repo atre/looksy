@@ -57,7 +57,7 @@ contrast: 5 AA fail, 13 AAA fail (19 checked)
 - **Fast** — persistent Chromium server cuts captures from ~2s to ~100ms
 - **Security hardened** — CSS selector injection prevention, path traversal guard, TOCTOU race elimination, restrictive `/tmp` permissions
 - **Strict flag parsing** — typos like `--contrast-aa` error immediately instead of being silently ignored
-- **Configurable storage** — `LOOKSY_DIR` env var for persistent baselines in CI (default: `/tmp/looksy`)
+- **Configurable storage** — `LOOKSY_DIR` env var for persistent baselines in CI (default: `~/.looksy`)
 - **MCP integration** — runs as a tool server for Claude Code
 
 ## Install
@@ -166,7 +166,7 @@ looksy validate-theme theme.json --compact --fail-on-aa
 looksy --serve                                    # Start once per session
 looksy <url> --design --name step1                # Full-page + compact metadata, labeled
 looksy <url> --check "contrast:aa"                # WCAG AA pass/fail with failing element details
-looksy <url> --diff-inline /tmp/looksy/preview-step1.png --name step2  # Before/after
+looksy <url> --diff-inline ~/.looksy/preview-step1.png --name step2  # Before/after
 ```
 
 ### Batch site audit
@@ -237,7 +237,7 @@ No browser needed — validates color contrast ratios directly from a theme conf
 ```bash
 looksy save <url> homepage                        # Save baseline
 # ... make changes ...
-looksy diff <url> homepage                        # Pixel diff → /tmp/looksy/diff.png
+looksy diff <url> homepage                        # Pixel diff → ~/.looksy/diff.png (-o keeps the capture; diff lands at <o>-diff.png)
 looksy diff before.png after.png                  # Or compare two local files
 ```
 
@@ -290,7 +290,7 @@ looksy <url> --report --name cart                 # Text summary AND preview-car
 
 ```bash
 # Basic screenshot
-looksy <url>                                    # Screenshot to /tmp/looksy/preview.png
+looksy <url>                                    # Screenshot to ~/.looksy/preview.png
 looksy ./mock.html                              # Screenshot a local file (auto-served via HTTP)
 looksy <url> --meta                             # + metadata sidecar (.meta.md)
 looksy <url> --annotate --meta                  # + numbered bounding boxes on elements
@@ -498,7 +498,7 @@ LOOKSY_DIR=./baselines looksy <url>             # Custom base directory (CI pers
 
 ## Output
 
-Screenshots save to `/tmp/looksy/preview.png` by default (overwritten each time). Set `LOOKSY_DIR` env var to change the base directory (e.g., `LOOKSY_DIR=./baselines` for persistent CI storage). Every invocation prints page dimensions and timing:
+Screenshots save to `~/.looksy/preview.png` by default (overwritten each time). Set `LOOKSY_DIR` env var to change the base directory (e.g., `LOOKSY_DIR=./baselines` for persistent CI storage). Every invocation prints page dimensions and timing:
 
 ```
 Page: 1280x4200px "My Site" (1.2s)
@@ -580,7 +580,7 @@ Writes `.meta.md` alongside the PNG with:
 | `--links-allow <hosts>` | With `--links`: comma-separated host suffixes bucketed `unverifiable` (bot-blockers) instead of dead | — |
 | `--image-optimizer` | Re-fetch each `<img>` at w=64 and w=1080 — same bytes → `PASS-THROUGH` (optimizer not resizing) | — |
 | `-o <dir>/` | Batch (`fleet`/`--urls`/`--pages`): trailing slash or existing dir → one `preview-<slug>.png` + sidecar per URL and `batch-report.md` in that dir; `-o file.png` keeps last-URL-wins | — |
-| `--cookie` / `--local-storage` / `--dismiss-consent` | Seed cookies / localStorage before load; click or hide consent banners (also applied to `--responsive-check` breakpoints) | — |
+| `--cookie` / `--local-storage` / `--dismiss-consent` / `--consent-selector <css>` | Seed cookies / localStorage before load; click or hide consent banners, or click a specific accept selector first (also applied to `--responsive-check` breakpoints) | — |
 | `--inject <css>` | Inject custom CSS before capture | — |
 | `--ignore <selectors>` | Mask dynamic regions before capture/diff (layout preserved) | — |
 | `--no-stabilize` | Skip default capture stabilization (fonts.ready + animation pause) | — |
@@ -648,6 +648,8 @@ The `--check` flag supports these patterns:
 | `h1-count[:N]` | `--check "h1-count"` | Exactly N `<h1>` (default 1); hidden headings ignored |
 | `heading-outline` | `--check "heading-outline"` | No skipped heading levels; names both headings on failure |
 | `no-broken-images` | `--check "no-broken-images"` | No `<img>` failed to load (lazy not-yet-loaded ≠ broken) |
+| `status:<code>` | `--check "status:404"` | Main document HTTP status equals code |
+| `assets-ok` | `--check "assets-ok"` | No same-origin css/js/img/font request failed or returned ≥ 400 |
 | `alt-text` | `--check "alt-text"` | Every `<img>` has an `alt` attribute |
 | `lang` / `canonical` / `meta-description` | `--check "lang, canonical"` | `<html lang>`, canonical link, meta description present |
 | `og-image` / `og-title` / `og-tags` | `--check "og-tags"` | Open Graph image / title / title+description+image present |
@@ -761,7 +763,7 @@ looksy https://staging.example.com --contrast --fail-on-aa
 
 # JSON output for assertion scripts
 looksy https://staging.example.com --meta --contrast --json
-cat /tmp/looksy/preview.meta.json | jq '.contrast.aaFailures'
+cat ~/.looksy/preview.meta.json | jq '.contrast.aaFailures'
 
 # Batch check all pages
 looksy https://staging.example.com --pages "/,/pricing,/about" --check "contrast:aa"

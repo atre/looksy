@@ -364,7 +364,7 @@ export async function startMcpServer(): Promise<void> {
             url: { type: 'string', description: 'URL to screenshot' },
             output: {
               type: 'string',
-              description: 'Output path (default: /tmp/looksy/preview.png)',
+              description: 'Output path (default: ~/.looksy/preview.png)',
             },
             mobile: { type: 'boolean', description: 'Use mobile viewport' },
             full: { type: 'boolean', description: 'Full page capture' },
@@ -665,7 +665,8 @@ export async function startMcpServer(): Promise<void> {
               results: result.checkResultsData,
             };
           }
-          if (result.responsiveCheckText) content.push({ type: 'text', text: result.responsiveCheckText });
+          if (result.responsiveCheckText)
+            content.push({ type: 'text', text: result.responsiveCheckText });
           if (result.auditResults) content.push({ type: 'text', text: result.auditResults });
           if (result.elapsedMs != null) structured.elapsedMs = result.elapsedMs;
           // Include image as resource reference
@@ -892,7 +893,9 @@ export async function startMcpServer(): Promise<void> {
 
         case 'check-fonts': {
           const { runChecksStructured } = await import('./check.js');
-          const cr = await withBrowserPage(args.url, (pg) => runChecksStructured(pg, args.assertions));
+          const cr = await withBrowserPage(args.url, (pg) =>
+            runChecksStructured(pg, args.assertions),
+          );
           const structured = {
             ok: true,
             url: args.url,

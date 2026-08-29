@@ -1,7 +1,7 @@
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { screenshot, type ScreenshotResult } from './screenshot.js';
-import { saveBaseline, diffBaseline, diffFiles, listBaselines } from './diff.js';
+import { saveBaseline, diffBaseline, diffFiles, listBaselines, formatBaselineAge } from './diff.js';
 import { startStaticServer, findFiles, type StaticServer } from './static-server.js';
 import {
   captureSemanticSnapshot,
@@ -12,7 +12,7 @@ import { attributeDiff, type Region } from './diff-attribution.js';
 import { listHistory, formatHistory } from './history.js';
 import { connectOrLaunch, withBrowser } from './server.js';
 import { navigateSafe } from './navigate.js';
-import { pMapSettled, LOOKSY_DIR } from './utils.js';
+import { pMapSettled, LOOKSY_DIR, legacyBaselinesHintFromDisk } from './utils.js';
 import {
   validateNumeric,
   validateFloat,
@@ -20,6 +20,8 @@ import {
   resolveViewport,
   applySuffix,
   combineInject,
+  diffOutputPaths,
+  resolveConsentMode,
 } from './cli-utils.js';
 import { checkContrastExit, printResult } from './cli-output.js';
 
@@ -79,6 +81,8 @@ export async function handleSubcommand(values: Values, positionals: string[]): P
 }
 
 async function listSubcommand(): Promise<void> {
+  const legacy = legacyBaselinesHintFromDisk();
+  if (legacy) console.error(legacy);
   const baselines = listBaselines();
   if (baselines.length === 0) {
     console.log('No baselines saved. Use: looksy save <url> <name>');
@@ -89,6 +93,8 @@ async function listSubcommand(): Promise<void> {
 }
 
 async function saveSubcommand(values: Values, positionals: string[]): Promise<void> {
+  const legacy = legacyBaselinesHintFromDisk();
+  if (legacy) console.error(legacy);
   const urlArg = positionals[1];
   const name = positionals[2];
   if (!urlArg || !name) {
@@ -108,7 +114,8 @@ async function saveSubcommand(values: Values, positionals: string[]): Promise<vo
     inject: combineInject(values.inject, values.ignore),
     cookie: values.cookie,
     localStorage: values['local-storage'],
-    dismissConsent: values['dismiss-consent'] ?? false,
+    dismissConsent: resolveConsentMode(values).dismiss,
+    consentSelector: resolveConsentMode(values).selector,
   });
   const saved = saveBaseline(result.imagePath, name);
   console.log(`Baseline "${name}" saved: ${saved}`);
@@ -173,6 +180,8 @@ async function printChangedElements(
 }
 
 async function diffSubcommand(values: Values, positionals: string[]): Promise<void> {
+  const legacy = legacyBaselinesHintFromDisk();
+  if (legacy) console.error(legacy);
   const arg1 = positionals[1];
   const arg2 = positionals[2];
   if (!arg1 || !arg2) {
@@ -195,9 +204,10 @@ async function diffSubcommand(values: Values, positionals: string[]): Promise<vo
   // URL + baseline name mode
   const url = resolveUrl(arg1);
   const vp = resolveViewport(values);
+  const paths = diffOutputPaths(values.output, LOOKSY_DIR);
   const result = await screenshot({
     url,
-    output: DEFAULT_OUTPUT,
+    output: paths.capture,
     ...vp,
     fullPage: values.full ?? false,
     selector: values.selector,
@@ -206,11 +216,13 @@ async function diffSubcommand(values: Values, positionals: string[]): Promise<vo
     inject: combineInject(values.inject, values.ignore),
     cookie: values.cookie,
     localStorage: values['local-storage'],
-    dismissConsent: values['dismiss-consent'] ?? false,
+    dismissConsent: resolveConsentMode(values).dismiss,
+    consentSelector: resolveConsentMode(values).selector,
   });
-  const diffOutput = values.output ?? `${LOOKSY_DIR}/diff.png`;
+  const diffOutput = paths.diff;
   const diff = await diffBaseline(result.imagePath, arg2, diffOutput, { collectRegions: true });
   console.log(diff.diffPath);
+  console.log(formatBaselineAge(statSync(diff.baselinePath).mtime, new Date()));
   console.log(`Changed: ${diff.changedPixels}/${diff.totalPixels} pixels (${diff.changePercent}%)`);
   if (parseFloat(diff.changePercent) > 0) {
     await printChangedElements(diff.regions, arg2, url);
@@ -407,7 +419,12 @@ async function validateThemeSubcommand(values: Values, positionals: string[]): P
   const { runThemeValidation } = await import('./validate-theme.js');
   const compact = values.compact ?? false;
   const splitList = (v: unknown): string[] | undefined =>
-    typeof v === 'string' && v.trim() ? v.split(',').map((t) => t.trim()).filter(Boolean) : undefined;
+    typeof v === 'string' && v.trim()
+      ? v
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : undefined;
   const { text, aaFailures } = runThemeValidation(absPath, {
     compact,
     textOn: splitList(values['text-on']),
@@ -649,7 +666,8 @@ async function guardSubcommand(values: Values, positionals: string[]): Promise<v
       inject: combineInject(values.inject, values.ignore),
       cookie: values.cookie,
       localStorage: values['local-storage'],
-      dismissConsent: values['dismiss-consent'] ?? false,
+      dismissConsent: resolveConsentMode(values).dismiss,
+      consentSelector: resolveConsentMode(values).selector,
     });
     saveBaseline(result.imagePath, name);
     console.log(`Baseline "${name}" created: ${baselinePath}`);
@@ -667,7 +685,8 @@ async function guardSubcommand(values: Values, positionals: string[]): Promise<v
     inject: combineInject(values.inject, values.ignore),
     cookie: values.cookie,
     localStorage: values['local-storage'],
-    dismissConsent: values['dismiss-consent'] ?? false,
+    dismissConsent: resolveConsentMode(values).dismiss,
+    consentSelector: resolveConsentMode(values).selector,
   });
   const diff = await diffBaseline(result.imagePath, name, `${LOOKSY_DIR}/guard-diff.png`, {
     collectRegions: true,

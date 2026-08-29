@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { validateBaselineName, loadPNG, LOOKSY_DIR } from './utils.js';
 import { countChangedPixels, type PixelDiffResult } from './pixel-diff.js';
@@ -21,6 +21,16 @@ export interface DiffOptions {
 
 function ensureDir(dir: string): void {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+}
+
+/** Format a baseline's save time and age relative to now, in local time. */
+export function formatBaselineAge(savedAt: Date, now: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  const stamp = `${savedAt.getFullYear()}-${p(savedAt.getMonth() + 1)}-${p(savedAt.getDate())} ${p(savedAt.getHours())}:${p(savedAt.getMinutes())}`;
+  const ms = now.getTime() - savedAt.getTime();
+  const age =
+    ms < 86_400_000 ? `${Math.floor(ms / 3_600_000)}h ago` : `${Math.floor(ms / 86_400_000)}d ago`;
+  return `baseline saved ${stamp} (${age})`;
 }
 
 /**

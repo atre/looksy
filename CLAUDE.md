@@ -11,7 +11,7 @@ A standalone CLI screenshot tool for AI-driven visual QA. Point it at any URL or
 - **Runtime:** Node.js (ES modules, TypeScript)
 - **Screenshot engine:** Playwright (Chromium only)
 - **Diff engine:** pngjs (pixel-level comparison)
-- **Output:** PNG to `/tmp/looksy/` (configurable via `LOOKSY_DIR` env var)
+- **Output:** PNG to `~/.looksy/` (configurable via `LOOKSY_DIR` env var)
 - **Testing:** Vitest (540 tests)
 - **Distribution:** npm package + global CLI binary (`looksy`)
 - **Config:** CLI flags only, no config files
@@ -29,7 +29,7 @@ See the **Workflows** section of [README.md](README.md) for the full screenshot 
 ## Core Commands
 
 ```bash
-looksy <url>                    # Screenshot → /tmp/looksy/preview.png
+looksy <url>                    # Screenshot → ~/.looksy/preview.png
 looksy <url> --design           # Full design review (meta + fonts + contrast + suggest)
 looksy <url> --design-audit     # Pre-launch QA gate
 looksy <url> --speed            # Performance audit
