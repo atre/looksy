@@ -41,6 +41,17 @@ export function summarize(key: string, data: any, opts?: { limit?: number }): st
       return `network: ${data.resources.length} resources, ${kb(data.totalSize)}, ${data.slowCount} slow`;
     case 'domStats':
       return `dom: ${data.totalElements} elements, depth ${data.maxDepth}, ${data.inlineStyles} inline styles`;
+    case 'motion': {
+      const anim = data.entries.filter((e: any) => e.kind === 'animation').length;
+      const trans = data.entries.filter((e: any) => e.kind === 'transition').length;
+      const rm =
+        data.reducedMotionRespected === null
+          ? 'not probed'
+          : data.reducedMotionRespected
+            ? 'respected'
+            : 'IGNORED';
+      return `motion: ${anim} animation${anim === 1 ? '' : 's'}, ${trans} transition${trans === 1 ? '' : 's'}, ${data.layoutRisk.length} layout-risk, reduced-motion ${rm}`;
+    }
     case 'cssVars':
       return `css-vars: ${data.length} custom propert${data.length === 1 ? 'y' : 'ies'}`;
     case 'fonts': {

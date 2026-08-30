@@ -61,6 +61,12 @@ Complete specification of all CLI flag behaviors, assertion grammars, and output
 **--filmstrip-scroll PX**
 - Scroll distance (px) to travel across the filmstrip capture (pairs with --filmstrip)
 
+**--filmstrip-frames N**
+- Frame count for --filmstrip, clamped 2-24 (default 8 — unchanged when omitted)
+
+**--filmstrip-interact "cmd1,cmd2,..."**
+- Same grammar as --interact. Captures frame 0 as a pre-trigger baseline, executes the actions, waits 16ms, then continues the remaining frames at the normal interval — so a click/hover-triggered animation is captured from its start instead of already finished by frame 0
+
 ### Output Control
 
 **-o path**
@@ -290,6 +296,15 @@ Each active analyzer also echoes a one-line summary to stdout (in addition to th
 **--dom-stats**
 - DOM complexity one-liner
 
+**--motion**
+- Motion audit: `document.getAnimations()` inventory (regardless of playState — finished fill-mode entrance animations still count) plus a capped (1500 element) computed-style transition scan
+- Flags layout-property transitions (jank risk — width/height/top/left/right/bottom/margin\*/padding\*/flex-basis/font-size/gap/inset\*, transitions only, not keyframe animations), infinite animations, and durations >1000ms
+- Runs a reduced-motion probe: `page.emulateMedia({reducedMotion:'reduce'})`, re-counts animations with effective duration >50ms and iterations ≠ 0, restores emulation afterward — reports `respected`/`IGNORED`/`not probed` (probe failed)
+- `## Motion` stdout summary: `motion: N animations, M transitions, K layout-risk, reduced-motion respected|IGNORED`
+
+**--reduced-motion**
+- Emulates `prefers-reduced-motion: reduce` for the whole browser context (set before any CSS evaluates, so no flash of un-reduced motion)
+
 **--links [--links-allow "domain1,domain2"]**
 - Dead link checker (follows href, reports 404/5xx)
 - Three-bucket verdicts: `ok` / `broken` / `unverifiable` — 403/429/999 and known bot-blockers (LinkedIn 999, X/Twitter, Instagram, Facebook — host or subdomain match) never count as broken, since those statuses usually mean the scraper got blocked, not that the link is dead
@@ -488,6 +503,7 @@ Grammar (comma-separated):
 - `self-hosted-fonts` — pre-deploy gate: fails if ANY external font domain found
 - `no-google-fonts` — GDPR: fails if fonts.googleapis.com / fonts.gstatic.com found
 - `unique-footer` / `unique-nav` — footer/nav presence (use with --pages for cross-page consistency)
+- `reduced-motion` — 0 animations with effective duration > 50ms and iterations ≠ 0 under `prefers-reduced-motion: reduce` (own emulateMedia probe, independent of `--motion`'s — running both together probes twice, expected); failure: `reduced-motion: N animations still run >50ms under prefers-reduced-motion`
 - `class:<name>` — some element has a class containing `<name>` (the old implicit fallback, now explicit)
 - `no-hscroll` — document not wider than the viewport; detail: `page 396px vs viewport 375px (+21px horizontal scroll)`
 - `touch-targets[:N]` — no control (a/button/input/select/textarea/role=button|link|menuitem) smaller than N px (default 24); inline `<a>` (display:inline) and sr-only elements exempt; lists the first 5 offenders

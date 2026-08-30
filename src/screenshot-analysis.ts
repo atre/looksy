@@ -4,6 +4,7 @@ import { extractA11yData, formatA11y } from './a11y.js';
 import { extractContrast } from './contrast.js';
 import { extractNetworkData, formatNetwork } from './network.js';
 import { extractDomStats, formatDomStats } from './dom-stats.js';
+import { extractMotion, formatMotionAudit } from './motion.js';
 import { extractCssVars, formatCssVars } from './css-vars.js';
 import { extractFonts, formatFonts } from './fonts.js';
 import { extractLighthouse, formatLighthouse } from './lighthouse.js';
@@ -110,6 +111,15 @@ export function buildAnalysisModules(
         const s = await extractDomStats(page);
         if (result.jsonData) result.jsonData.domStats = s;
         return { section: formatDomStats(s, { compact }), summary: summarize('domStats', s) };
+      },
+    },
+    {
+      flag: config.motion,
+      key: 'motion',
+      run: async () => {
+        const m = await extractMotion(page);
+        if (result.jsonData) result.jsonData.motion = m;
+        return { section: formatMotionAudit(m, { compact }), summary: summarize('motion', m) };
       },
     },
     {

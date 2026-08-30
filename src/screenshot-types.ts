@@ -29,6 +29,10 @@ export interface ScreenshotConfig {
   sections?: boolean;
   filmstrip?: number;
   filmstripScroll?: number;
+  /** --filmstrip-frames: clamp 2-24, default 8 (applied at the capture call site). */
+  filmstripFrames?: number;
+  /** --filmstrip-interact: same grammar as --interact, executed after frame 0 inside the filmstrip. */
+  filmstripInteract?: string;
   compact?: boolean;
   report?: boolean;
   check?: string;
@@ -36,6 +40,10 @@ export interface ScreenshotConfig {
   format?: 'png' | 'jpeg';
   quality?: number;
   domStats?: boolean;
+  /** --reduced-motion: emulate prefers-reduced-motion: reduce for the whole context (set before any CSS evaluates). */
+  reducedMotion?: boolean;
+  /** --motion: run the getAnimations()/transition-scan audit and reduced-motion probe. */
+  motion?: boolean;
   browser?: Browser;
   cookie?: string;
   /** --local-storage "k=v; k2=v2" — seeded via init script before page scripts run. */

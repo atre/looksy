@@ -109,6 +109,7 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
       viewport: { width: config.width, height: config.height },
       colorScheme: config.darkMode ? 'dark' : 'light',
     };
+    if (config.reducedMotion) contextOpts.reducedMotion = 'reduce';
     if (config.storageState) contextOpts.storageState = config.storageState;
     if (config.basicAuth) {
       const colonIdx = config.basicAuth.indexOf(':');
@@ -151,12 +152,15 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
     // Filmstrip explicitly wants motion across its frames, so stabilizePage opts out there;
     // --record never reaches this function at all (recordVideo() is a separate pipeline).
     const filmstripActive = Boolean(config.filmstrip && config.filmstrip > 0);
+    // --motion needs real (unfrozen) transition-duration/animation-play-state to audit —
+    // stabilizePage's freeze rule would otherwise report every transition as 0s.
+    const motionActive = Boolean(config.motion);
 
     // stabilizePage's freeze rule and --inject both land as an inline <style> tag, which a
     // page with a strict style-src CSP refuses — tag (never drop) so that noise doesn't
     // masquerade as a real page bug in the ## Errors block.
     const looksyStyleActive =
-      Boolean(config.inject) || ((config.stabilize ?? true) && !filmstripActive);
+      Boolean(config.inject) || ((config.stabilize ?? true) && !filmstripActive && !motionActive);
     page.on('console', (msg) => {
       if (msg.type() !== 'error') return;
       consoleErrors.push(tagLooksyConsoleError(msg.text(), looksyStyleActive));
@@ -415,7 +419,7 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
     // Stabilize immediately before capture/analysis: settle web fonts (capped) and
     // freeze animations/transitions so FOUT and mid-transition frames don't poison the
     // screenshot or the contrast/a11y sampling that runs later against this same page.
-    if ((config.stabilize ?? true) && !filmstripActive) {
+    if ((config.stabilize ?? true) && !filmstripActive && !motionActive) {
       await safeRun(() => stabilizePage(page), consoleErrors, 'Stabilize');
     }
 
@@ -467,9 +471,10 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
       const path = await safeRun(
         () =>
           captureFilmstrip(page, filmstripPath, {
-            frames: 8,
+            frames: config.filmstripFrames ?? 8,
             duration: config.filmstrip!,
             scroll: config.filmstripScroll,
+            interact: config.filmstripInteract,
           }),
         consoleErrors,
         'Filmstrip',

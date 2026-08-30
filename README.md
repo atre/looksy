@@ -396,6 +396,9 @@ looksy <url> --sweep --check "contrast:aa"      # Check contrast at all breakpoi
 looksy <url> --sections                         # Screenshot each section individually
 looksy <url> --filmstrip 2000                   # 8-frame filmstrip over 2s
 looksy <url> --filmstrip 2000 --filmstrip-scroll 1200  # Scroll 1200px across the filmstrip
+looksy <url> --filmstrip 800 --filmstrip-frames 4 --filmstrip-interact "click:#go"  # Frame 0 = pre-trigger baseline
+looksy <url> --motion                           # Motion audit: layout-risk transitions, infinite/long, reduced-motion probe
+looksy <url> --reduced-motion --check "reduced-motion"  # Verify prefers-reduced-motion is respected
 looksy <url> --compare https://other.com        # Visual diff between two URLs
 looksy <url> --compare https://other.com --class-audit  # + CSS class fingerprint overlap
 looksy <url> --pdf                              # Export as PDF
@@ -540,6 +543,8 @@ Writes `.meta.md` alongside the PNG with:
 | `--fonts` | Font loading verification | — |
 | `--lighthouse` | Extended perf (memory, long tasks, INP) | — |
 | `--dom-stats` | DOM complexity (elements, depth, inline styles) | — |
+| `--motion` | Motion audit: running animations, layout-risk transitions, infinite/long, reduced-motion probe | — |
+| `--reduced-motion` | Emulate `prefers-reduced-motion: reduce` for the whole capture | — |
 | `--links` | Dead link checker | — |
 | `--coverage` | CSS/JS code coverage via CDP | — |
 | `--class-audit` | All CSS class names + recurring class combos (component shape detection) | — |
@@ -646,6 +651,7 @@ The `--check` flag supports these patterns:
 | `no-google-fonts` | `--check "no-google-fonts"` | GDPR: fails if Google Fonts detected |
 | `unique-footer` | `--check "unique-footer"` | Footer presence (use with `--pages` for consistency) |
 | `unique-nav` | `--check "unique-nav"` | Nav presence (use with `--pages` for consistency) |
+| `reduced-motion` | `--check "reduced-motion"` | No animation still runs >50ms under `prefers-reduced-motion` |
 | `class:<name>` | `--check "class:btn-primary"` | Some element has a class containing the name |
 | `no-hscroll` | `--check "no-hscroll"` | Page is not wider than the viewport (no horizontal scroll) |
 | `touch-targets[:N]` | `--check "touch-targets:24"` | No control smaller than N px (default 24); inline text links exempt |

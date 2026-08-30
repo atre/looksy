@@ -106,9 +106,13 @@ async function main(): Promise<void> {
       sections: { type: 'boolean', default: false },
       filmstrip: { type: 'string' },
       'filmstrip-scroll': { type: 'string' },
+      'filmstrip-frames': { type: 'string' },
+      'filmstrip-interact': { type: 'string' },
       format: { type: 'string' },
       quality: { type: 'string' },
       'dom-stats': { type: 'boolean', default: false },
+      'reduced-motion': { type: 'boolean', default: false },
+      motion: { type: 'boolean', default: false },
       'css-vars': { type: 'boolean', default: false },
       fonts: { type: 'boolean', default: false },
       lighthouse: { type: 'boolean', default: false },
@@ -459,6 +463,10 @@ async function runCaptureFlow(
   const filmstripScroll = values['filmstrip-scroll']
     ? validateNumeric('filmstrip-scroll', values['filmstrip-scroll'])
     : undefined;
+  const filmstripFrames = values['filmstrip-frames']
+    ? Math.min(24, Math.max(2, validateNumeric('filmstrip-frames', values['filmstrip-frames'])))
+    : undefined;
+  const filmstripInteract = values['filmstrip-interact'];
   const format =
     values.format === 'jpeg' || values.format === 'jpg' ? ('jpeg' as const) : ('png' as const);
   const quality = values.quality
@@ -487,6 +495,8 @@ async function runCaptureFlow(
       })()
     : undefined;
   const domStats = values['dom-stats'] ?? false;
+  const reducedMotion = values['reduced-motion'] ?? false;
+  const motion = values.motion ?? false;
   const cssVars = values['css-vars'] ?? false;
   const fonts = values.fonts ?? false;
   const lighthouse = values.lighthouse ?? false;
@@ -603,6 +613,8 @@ async function runCaptureFlow(
     thumb,
     crop,
     domStats,
+    reducedMotion,
+    motion,
     cssVars,
     fonts,
     lighthouse,
@@ -655,6 +667,8 @@ async function runCaptureFlow(
     sections,
     filmstrip,
     filmstripScroll,
+    filmstripFrames,
+    filmstripInteract,
     pdf,
     fold,
     micro,
@@ -763,6 +777,8 @@ async function runCaptureFlow(
       sections: false,
       filmstrip: undefined,
       filmstripScroll: undefined,
+      filmstripFrames: undefined,
+      filmstripInteract: undefined,
       pdf: false,
     };
     const sweep = await responsiveSweep(baseConfig, output, customBreakpoints);

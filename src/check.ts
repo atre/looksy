@@ -89,6 +89,10 @@ export const CHECK_ASSERTIONS: Array<{ syntax: string; description: string }> = 
     syntax: 'unique-footer | unique-nav',
     description: '<footer> / <nav> present (cross-page compare needs --pages)',
   },
+  {
+    syntax: 'reduced-motion',
+    description: 'no animation still runs >50ms under prefers-reduced-motion',
+  },
 ];
 
 /** Names accepted verbatim (case-insensitive) — everything else must match a prefixed form. */
@@ -115,6 +119,7 @@ const BARE_ASSERTIONS = new Set([
   'unique-nav',
   'contrast:aa',
   'contrast:aaa',
+  'reduced-motion',
 ]);
 
 /**
@@ -161,6 +166,45 @@ export function evaluateAssetsOk(failed: FailedRequest[], assertion = 'assets-ok
       .map((f) => `${f.url} (${f.status ?? f.error ?? 'failed'})`)
       .join(', ')}`,
   };
+}
+
+const REDUCED_MOTION_CHECK_THRESHOLD_MS = 50;
+
+/**
+ * Probe prefers-reduced-motion: reduce and count animations still running past the
+ * kill-switch threshold. Mutates page state (emulateMedia), so the reduce emulation is
+ * always cleared in `finally` — even on failure — so it never leaks into other analyzers
+ * or the screenshot itself. Runs its own emulateMedia probe independent of `--motion`'s
+ * (extractMotion in motion.ts) — using both flags together probes twice, which is expected.
+ */
+export async function evaluateReducedMotionAssertion(page: Page): Promise<CheckResult> {
+  const assertion = 'reduced-motion';
+  try {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const stillRunning = await page.evaluate((thresholdMs: number) => {
+      let count = 0;
+      for (const anim of document.getAnimations()) {
+        const timing = anim.effect?.getTiming ? anim.effect.getTiming() : ({} as any);
+        const durationMs = typeof timing.duration === 'number' ? timing.duration : 0;
+        const iterations = timing.iterations ?? 1;
+        if (durationMs > thresholdMs && iterations !== 0) count++;
+      }
+      return count;
+    }, REDUCED_MOTION_CHECK_THRESHOLD_MS);
+    return stillRunning === 0
+      ? {
+          assertion,
+          pass: true,
+          detail: `0 animations still run >${REDUCED_MOTION_CHECK_THRESHOLD_MS}ms under prefers-reduced-motion`,
+        }
+      : {
+          assertion,
+          pass: false,
+          detail: `${stillRunning} animations still run >${REDUCED_MOTION_CHECK_THRESHOLD_MS}ms under prefers-reduced-motion`,
+        };
+  } finally {
+    await page.emulateMedia({ reducedMotion: null });
+  }
 }
 
 /**
@@ -300,11 +344,14 @@ export async function runChecksStructured(
   }
 
   // Node-side checks — assets-ok / status:<code> need network data not available in page.evaluate
-  const isNodeSide = (l: string) => l === 'assets-ok' || /^status:\d{3}$/.test(l);
+  const isNodeSide = (l: string) =>
+    l === 'assets-ok' || l === 'reduced-motion' || /^status:\d{3}$/.test(l);
   for (const item of items) {
     const l = item.toLowerCase().trim();
     if (l === 'assets-ok') {
       asyncResults.push(evaluateAssetsOk(opts.failedRequests ?? [], item));
+    } else if (l === 'reduced-motion') {
+      asyncResults.push(await evaluateReducedMotionAssertion(page));
     } else if (/^status:\d{3}$/.test(l)) {
       asyncResults.push(evaluateStatusAssertion(item, opts.httpStatus));
     }

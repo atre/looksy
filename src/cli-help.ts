@@ -76,6 +76,9 @@ Metadata & analysis:
   --fonts                Font loading verification
   --lighthouse           Extended performance metrics (memory, long tasks)
   --dom-stats            DOM complexity one-liner (elements, depth, inline styles)
+  --motion               Motion audit: running animations/transitions, layout-risk
+                         transitions, infinite/long durations, reduced-motion probe
+  --reduced-motion       Emulate prefers-reduced-motion: reduce for the whole capture
   --links                Dead link checker (HEAD request all hrefs)
   --links-allow <domains>
                          Comma-separated host suffixes always bucketed unverifiable (never broken)
@@ -117,6 +120,7 @@ Token-saving:
                            lang · canonical · meta-description · og-image · og-title
                            og-tags · twitter-card · no generator · translated
                            self-hosted-fonts · no-google-fonts · unique-footer · unique-nav
+                           reduced-motion
   --audit <pattern>      Flag elements matching a design token pattern
   -q, --quiet            No output-path lines — Page line, analyzer summaries, checks only
   --brief                ≤10-line red-only summary for gate/hook use (implies -q)
@@ -129,6 +133,10 @@ Capture modes:
   --sections             Screenshot each page section individually
   --filmstrip <ms>       Capture frames over duration (filmstrip PNG)
   --filmstrip-scroll <px> Scroll distance during filmstrip capture
+  --filmstrip-frames <n> Number of frames (clamped 2-24, default 8)
+  --filmstrip-interact <actions>
+                         Trigger actions (--interact grammar) after frame 0, so a
+                         click/hover-triggered animation is captured from its start
   --components <sels>    Screenshot multiple elements (comma-separated selectors)
   --responsive-check     Responsive audit: overflow, touch targets, text size
   --target-size <px>     Touch target minimum size (default 24 = WCAG 2.2 AA; 44 = AAA/HIG)

@@ -6,6 +6,11 @@ All notable changes to looksy are documented here. Format follows [Keep a Change
 
 ### Added
 
+- `--motion` — animation/transition audit (`document.getAnimations()` inventory + capped computed-style transition scan): flags layout-property transitions (jank risk), infinite animations, durations > 1000ms, and probes `prefers-reduced-motion`
+- `--reduced-motion` — emulate `prefers-reduced-motion: reduce` for the whole capture
+- `--check "reduced-motion"` — fails if any animation still runs > 50ms under `prefers-reduced-motion`
+- `--filmstrip-frames <n>` — frame count for `--filmstrip` (clamped 2-24, default 8 unchanged)
+- `--filmstrip-interact "<actions>"` — trigger actions (`--interact` grammar) right after frame 0, so a click/hover-triggered animation is captured from its start instead of already finished
 - `scheme:` in the Page header — every text/JSON capture names the color scheme it rendered under (headless Chromium defaults to light; dark-default apps were silently captured light)
 - `--both` — capture light + dark in one invocation (single URL, `fleet`, `--urls`); errors if combined with `--dark`
 - `--thumb <w>` — small JPEG (q60) sibling of the full-res capture for cheap AI reads

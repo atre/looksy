@@ -2,11 +2,15 @@ import type { Page } from 'playwright';
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { loadPNG } from './utils.js';
+import { parseInteractions, executeInteractions } from './interact.js';
 
 export interface FilmstripConfig {
-  frames: number;        // default 8
-  duration: number;      // total capture time in ms, default 2000
-  scroll?: number;       // if set, gradually scroll this many px during capture
+  frames: number; // default 8
+  duration: number; // total capture time in ms, default 2000
+  scroll?: number; // if set, gradually scroll this many px during capture
+  /** Same grammar as --interact. Executed right after frame 0 so the trigger fires from
+   *  frame 0's baseline instead of before the filmstrip starts (which misses fast animations). */
+  interact?: string;
 }
 
 /**
@@ -22,7 +26,7 @@ export async function captureFilmstrip(
   const dir = dirname(outputPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
-  const { frames, duration, scroll } = config;
+  const { frames, duration, scroll, interact } = config;
   const interval = frames > 1 ? duration / (frames - 1) : duration;
   const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
 
@@ -39,7 +43,12 @@ export async function captureFilmstrip(
     const buf = await page.screenshot({ type: 'png' });
     frameBuffers.push(buf);
 
-    if (i < frames - 1) {
+    if (i === 0 && interact) {
+      // Trigger from frame 0's baseline, not before it — a click-triggered animation started
+      // before the filmstrip begins would already be finished by frame 0.
+      await executeInteractions(page, parseInteractions(interact));
+      await page.waitForTimeout(16);
+    } else if (i < frames - 1) {
       await page.waitForTimeout(interval);
     }
   }
@@ -90,4 +99,3 @@ export async function captureFilmstrip(
   writeFileSync(outputPath, PNG.sync.write(output));
   return outputPath;
 }
-
