@@ -2,8 +2,7 @@ import { LOOKSY_DIR } from './utils.js';
 
 const DEFAULT_OUTPUT = `${LOOKSY_DIR}/preview.png`;
 
-export function printHelp(): void {
-  console.log(`looksy — screenshot any URL for AI-assisted visual development
+const HELP_TEXT = `looksy — screenshot any URL for AI-assisted visual development
 
 Usage:
   looksy <url> [options]          Screenshot a URL
@@ -132,7 +131,7 @@ Capture modes:
   --filmstrip-scroll <px> Scroll distance during filmstrip capture
   --components <sels>    Screenshot multiple elements (comma-separated selectors)
   --responsive-check     Responsive audit: overflow, touch targets, text size
-  --target-size <px>     Touch target minimum size (default 44; 24 for WCAG AA)
+  --target-size <px>     Touch target minimum size (default 24 = WCAG 2.2 AA; 44 = AAA/HIG)
   --history              Save each capture to timestamped history timeline
 
 Auth & consent:
@@ -142,6 +141,7 @@ Auth & consent:
                          Cookiebot, Usercentrics, Didomi, CookieYes, …) or hide the CMP overlay
   --consent-selector <css> Click this accept control first (implies --dismiss-consent); heuristics as fallback
   --storage-state <path> Playwright storage state JSON file
+  --save-storage-state <path> Write cookies + localStorage after the run (pairs with --storage-state)
   --basic-auth <u:p>     Basic auth credentials (user:password)
 
 Comparison & diffing:
@@ -195,7 +195,65 @@ Advanced:
   --mcp                  Run as MCP tool server for Claude Code
   -v, --version          Show version number
   -h, --help             Show this help
+  --help <section>       One help section (e.g. --help batch, --help auth)
 
 Environment:
-  LOOKSY_DIR             Base directory (default: ~/.looksy). Use for persistent baselines in CI.`);
+  LOOKSY_DIR             Base directory (default: ~/.looksy). Use for persistent baselines in CI.`;
+
+const HEADING = /^[A-Z][A-Za-z &-]*:$/;
+
+function splitBlocks(text: string): Array<{ name: string; body: string }> {
+  const lines = text.split('\n');
+  const blocks: Array<{ name: string; body: string }> = [];
+  let current: { name: string; lines: string[] } | null = null;
+  for (const line of lines) {
+    if (HEADING.test(line)) {
+      if (current) {
+        blocks.push({ name: current.name, body: current.lines.join('\n').replace(/\n+$/, '') });
+      }
+      current = { name: line.slice(0, -1), lines: [line] };
+    } else if (current) {
+      current.lines.push(line);
+    }
+  }
+  if (current) {
+    blocks.push({ name: current.name, body: current.lines.join('\n').replace(/\n+$/, '') });
+  }
+  return blocks;
+}
+
+export function helpSectionNames(): string[] {
+  return splitBlocks(HELP_TEXT).map((b) => b.name);
+}
+
+export function helpSection(query: string): string | undefined {
+  const q = query.toLowerCase();
+  const matched = splitBlocks(HELP_TEXT).filter((b) => {
+    const lower = b.name.toLowerCase();
+    if (lower.startsWith(q)) return true;
+    return lower.split(/[\s&-]+/).some((w) => w.startsWith(q));
+  });
+  if (matched.length === 0) return undefined;
+  return matched.map((b) => b.body).join('\n\n');
+}
+
+export function printHelp(section?: string): boolean {
+  const names = helpSectionNames();
+  if (section === undefined) {
+    const nl = HELP_TEXT.indexOf('\n');
+    const title = HELP_TEXT.slice(0, nl);
+    const rest = HELP_TEXT.slice(nl + 1);
+    const sectionsLine = `Sections: ${names.map((n) => n.toLowerCase()).join(' · ')} — looksy --help <section>`;
+    console.log(`${title}\n${sectionsLine}\n${rest}`);
+    return true;
+  }
+  const block = helpSection(section);
+  if (block !== undefined) {
+    console.log(block);
+    return true;
+  }
+  console.error(
+    `unknown help section "${section}" — sections: ${names.map((n) => n.toLowerCase()).join(' · ')}`,
+  );
+  return false;
 }

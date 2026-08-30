@@ -281,7 +281,10 @@ looksy <url> --check "sticky header, contrast:aa" # Pass/fail assertions (~50 to
 # Want the PNG too, e.g. to eyeball it later? Add -o/--name/--suffix — an explicit
 # output path is honored even in --report's normally screenshot-free text-only mode.
 looksy <url> --report --name cart                 # Text summary AND preview-cart.png
+looksy <url> --selector 'footer input[type="email"]' --mobile   # Crop to the element under test ("does this string fit?")
 ```
+
+Catalog-size sweeps (`--pages "@sitemap"` on a 100-page store) take minutes, not seconds — run them in the background, or start with `--pages-limit 20` and widen once the first pass is clean.
 
 ## Usage
 
@@ -326,7 +329,7 @@ looksy <url> --format jpeg --quality 80         # JPEG output (smaller files)
 
 # Interact before capture
 looksy <url> --interact "click:.btn,wait:500"   # Click, wait, then screenshot
-looksy <url> --interact "scroll:800,wait:200"   # Scroll down, then screenshot
+looksy <url> --interact "scroll:800,wait:200"   # Scroll down, then screenshot (Page line shows · scrollY: 800px)
 looksy <url> --interact "scroll-to:.footer"     # Scroll element into view
 looksy <url> --interact "type:.search=hello"    # Type into input, then screenshot
 looksy <url> --interact "hover:.menu"           # Hover element, then screenshot
@@ -431,7 +434,7 @@ looksy <url> --delta                            # Incremental diff vs previous (
 looksy <url> --suggest                          # Actionable fix recommendations
 looksy <url> --layout --meta                    # Flex/grid overlay + legend
 looksy <url> --responsive-check                 # Responsive audit (3 breakpoints)
-looksy <url> --responsive-check --target-size 24  # AA touch-target threshold (default 44 = AAA)
+looksy <url> --responsive-check --target-size 44  # AAA touch-target threshold (default 24 = WCAG 2.2 AA)
 looksy <url> --components ".hero,.cta"          # Screenshot elements + grid composite
 looksy <url> --history                          # Save to timestamped timeline
 looksy guard <name> <url>                       # Visual regression gate (auto-baseline)
@@ -469,6 +472,7 @@ looksy <url> --local-storage "cmp_consent=1"    # Seed localStorage before any p
 looksy <url> --dismiss-consent                  # Click the CMP accept button (OneTrust, Cookiebot, Sourcepoint,
                                                 # Usercentrics, Didomi, CookieYes, …) or hide the overlay
 looksy <url> --storage-state ./auth.json        # Playwright storage state file
+looksy <url> --interact "click:.add-to-cart" --save-storage-state ./cart.json   # Record state to replay with --storage-state
 looksy <url> --basic-auth user:password         # HTTP basic auth
 
 # Output shaping
@@ -498,7 +502,7 @@ LOOKSY_DIR=./baselines looksy <url>             # Custom base directory (CI pers
 
 ## Output
 
-Screenshots save to `~/.looksy/preview.png` by default (overwritten each time). Set `LOOKSY_DIR` env var to change the base directory (e.g., `LOOKSY_DIR=./baselines` for persistent CI storage). Every invocation prints page dimensions and timing:
+Screenshots save to `~/.looksy/preview.png` by default (overwritten each time — a `note: replaced previous default capture (written HH:MM:SS, Ns ago)` line says when that happened; pass `-o`/`--name` to keep several). Set `LOOKSY_DIR` env var to change the base directory (e.g., `LOOKSY_DIR=./baselines` for persistent CI storage). Every invocation prints page dimensions and timing:
 
 ```
 Page: 1280x4200px "My Site" (1.2s)
@@ -550,7 +554,7 @@ Writes `.meta.md` alongside the PNG with:
 | `--delta` | Incremental diff vs previous capture (only what changed) | ~80 |
 | `--layout` | Flex/grid container overlay with numbered labels | — |
 | `--responsive-check` | Responsive audit at 3 breakpoints (overflow, touch, text) | — |
-| `--target-size <n>` | Touch-target threshold for `--responsive-check` (default 44 = AAA, 24 = AA) | — |
+| `--target-size <n>` | Touch-target threshold for `--responsive-check` (default 24 = WCAG 2.2 AA, 44 = AAA) | — |
 | `--components <sels>` | Multi-selector element capture with grid composite | — |
 | `--history` | Save capture to timestamped timeline | — |
 | `guard <name> <url>` (or `--guard <name>`) | Visual regression gate (auto-baseline, threshold, CI exit codes) | — |
@@ -644,7 +648,7 @@ The `--check` flag supports these patterns:
 | `unique-nav` | `--check "unique-nav"` | Nav presence (use with `--pages` for consistency) |
 | `class:<name>` | `--check "class:btn-primary"` | Some element has a class containing the name |
 | `no-hscroll` | `--check "no-hscroll"` | Page is not wider than the viewport (no horizontal scroll) |
-| `touch-targets[:N]` | `--check "touch-targets:24"` | No control smaller than N px (default 44); inline text links exempt |
+| `touch-targets[:N]` | `--check "touch-targets:24"` | No control smaller than N px (default 24); inline text links exempt |
 | `h1-count[:N]` | `--check "h1-count"` | Exactly N `<h1>` (default 1); hidden headings ignored |
 | `heading-outline` | `--check "heading-outline"` | No skipped heading levels; names both headings on failure |
 | `no-broken-images` | `--check "no-broken-images"` | No `<img>` failed to load (lazy not-yet-loaded ≠ broken) |

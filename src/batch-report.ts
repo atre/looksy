@@ -31,6 +31,8 @@ export interface BatchReportRow {
   touchTargetFails?: number;
   /** Whether horizontal overflow was detected — undefined if responsive check not run */
   hasOverflow?: boolean;
+  /** robots.txt has a bare "Disallow: /" — site-level, reported once in the summary. */
+  robotsDisallowAll?: boolean;
 }
 
 /**
@@ -55,12 +57,13 @@ export function extractBatchRow(
     const seo = data.seo;
     const issues: string[] = [];
     if (!seo.canonical) issues.push('no-canonical');
-    if (!seo.og?.title) issues.push('no-og-title');
+    if (!seo.og?.['og:title']) issues.push('no-og-title');
     if (!seo.description) issues.push('no-description');
     if (seo.generator) issues.push('generator');
     row.seoIssues = issues.length;
     row.hreflang = Array.isArray(seo.hreflang) && seo.hreflang.length > 0;
     row.generator = seo.generator ?? null;
+    if (seo.robotsTxt?.disallowAll === true) row.robotsDisallowAll = true;
   }
 
   // Schema (jsonData.schema is the SchemaData object)
@@ -147,7 +150,7 @@ export function formatBatchReport(rows: BatchReportRow[], opts: { baseUrl?: stri
   // Build header
   const headers: string[] = ['URL'];
   if (hasContrast) headers.push('Contrast AA');
-  if (hasResponsive) headers.push('Touch Targets');
+  if (hasResponsive) headers.push('Touch Targets (AA)');
   if (hasResponsive) headers.push('Overflow');
   if (hasSeoIssues) headers.push('SEO Issues');
   if (hasHreflang) headers.push('hreflang');
@@ -245,6 +248,9 @@ export function formatBatchReport(rows: BatchReportRow[], opts: { baseUrl?: stri
     const extFonts = rows.filter((r) => r.fontStatus === 'external').length;
     if (extFonts > 0) summaryParts.push(`${extFonts} page(s) with external fonts`);
     else summaryParts.push('all fonts self-hosted');
+  }
+  if (rows.some((r) => r.robotsDisallowAll)) {
+    summaryParts.push('robots.txt disallows all (Disallow: /)');
   }
   lines.push(`**Summary:** ${summaryParts.join(' | ')}\n`);
 

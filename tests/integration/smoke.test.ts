@@ -151,11 +151,11 @@ describe('smoke tests', () => {
       '<!doctype html><html lang="en"><body style="background:#fff;color:#000">' +
       '<a href="#main" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Skip to main content</a>' +
       '<main id="main"><h1>Title</h1><p>Body copy.</p>' +
-      '<a href="/x" style="display:inline-block;width:120px;height:40px">Tap me</a></main></body></html>';
+      '<a href="/x" style="display:inline-block;width:120px;height:20px">Tap me</a></main></body></html>';
     // Standalone --responsive-check prints its report to stdout (no .meta sidecar).
     const result = runWithStdin(html, '--html', '--responsive-check');
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('Tap me'); // the real sub-44px target is still flagged
+    expect(result.stdout).toContain('Tap me'); // the real sub-24px (AA default) target is still flagged
     expect(result.stdout).not.toContain('Skip to main content'); // sr-only excluded
   }, 30_000);
 
@@ -179,7 +179,7 @@ describe('smoke tests', () => {
   }, 30_000);
 
   it('--responsive-check falls back to aria-label for an icon-only button with no text', () => {
-    const html = '<button aria-label="Toggle menu" style="width:40px;height:40px"></button>';
+    const html = '<button aria-label="Toggle menu" style="width:20px;height:20px"></button>';
     const result = runWithStdin(html, '--html', '--responsive-check');
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('<button> "Toggle menu"');

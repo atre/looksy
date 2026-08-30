@@ -19,9 +19,22 @@ export function isSameOrigin(url: string, pageUrl: string): boolean {
   }
 }
 
-export function formatFailedRequests(list: FailedRequest[]): string {
+/**
+ * Cloudflare injects /cdn-cgi/ scripts (email-decode, rocket-loader) and image resizes into
+ * proxied pages; their failures are never the site's bug.
+ */
+export function isInjectedAsset(url: string): boolean {
+  try {
+    return new URL(url).pathname.startsWith('/cdn-cgi/');
+  } catch {
+    return false;
+  }
+}
+
+export function formatFailedRequests(list: FailedRequest[], ignored = 0): string {
   const f = list[0];
-  return `⚠ ${list.length} asset(s) failed (first: ${f.url} — ${f.status ?? f.error ?? 'failed'})`;
+  const ignoredNote = ignored > 0 ? ` (+${ignored} cloudflare-injected ignored)` : '';
+  return `⚠ ${list.length} asset(s) failed (first: ${f.url} — ${f.status ?? f.error ?? 'failed'})${ignoredNote}`;
 }
 
 export function classifyBrokenImage(

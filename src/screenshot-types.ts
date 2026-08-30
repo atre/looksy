@@ -45,6 +45,7 @@ export interface ScreenshotConfig {
   /** --consent-selector — CSS selector tried first, before the --dismiss-consent heuristics. */
   consentSelector?: string;
   storageState?: string;
+  saveStorageState?: string;
   basicAuth?: string;
   cssVars?: boolean;
   fonts?: boolean;
@@ -150,12 +151,18 @@ export interface ScreenshotResult {
     /** Top-3 elements/text causing the horizontal overflow (only set when width > viewportWidth). */
     overflowCulprits?: import('./responsive-check.js').OverflowCulprit[];
   };
+  /** window.scrollY at capture time when > 0 (a --interact scroll or the page's own script moved it). */
+  scrollY?: number;
   /** Path of the .meta.json sidecar when both formats were written (see metaMd). */
   jsonPath?: string;
+  /** --save-storage-state: where the context's cookies/localStorage were written. */
+  storageStatePath?: string;
   /** HTTP status of the main document when it was an error (>= 400). */
   httpStatus?: number;
   /** Same-origin css/js/img/font requests that failed or returned >= 400. */
   failedRequests?: import('./failed-requests.js').FailedRequest[];
+  /** Same-origin /cdn-cgi/ (Cloudflare-injected) failures left out of failedRequests. */
+  failedRequestsIgnored?: number;
   /** True when navigation's networkidle wait hit the NETWORK_IDLE_TIMEOUT_MS cap (navigate.ts)
    *  — a third-party embed (chat widget, ads, analytics beacon) kept the network busy forever,
    *  so looksy proceeded via domcontentloaded instead of waiting out the full --timeout.

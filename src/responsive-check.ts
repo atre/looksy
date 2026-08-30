@@ -38,6 +38,8 @@ interface BreakpointResult {
   /** Top-3 elements/text whose own box extends past the viewport, by right edge (outermost wins). */
   overflowCulprits?: OverflowCulprit[];
   smallTouchTargets: number;
+  /** Non-exempt controls smaller than 44px (WCAG 2.5.5 AAA / HIG) — advisory count, never a failure. */
+  touchTargetsBelow44?: number;
   /** Small inline text links (WCAG 2.5.8 exempt) — reported separately, never counted as failures. */
   smallTextLinks?: number;
   tinyText: number;
@@ -52,15 +54,17 @@ interface BreakpointResult {
   contrastDetails?: ContrastPairResult[];
 }
 
+export const DEFAULT_TARGET_SIZE = 24;
+
 export interface ResponsiveCheckResult {
   breakpoints: BreakpointResult[];
   totalIssues: number;
-  /** The target size threshold used (default 44) */
+  /** The target size threshold used (default 24) */
   targetSize: number;
 }
 
 export interface ResponsiveCheckOptions {
-  /** Minimum touch target size in px (default 44, WCAG 2.5.5 AAA; use 24 for WCAG 2.5.8 AA) */
+  /** Minimum touch target size in px (default 24, WCAG 2.2 SC 2.5.8 AA; 44 = SC 2.5.5 AAA / platform HIG) */
   targetSize?: number;
   /** Skip hidden/sr-only elements */
   visibleOnly?: boolean;
@@ -98,7 +102,7 @@ export async function runResponsiveCheck(
   browser?: Browser,
   opts?: ResponsiveCheckOptions,
 ): Promise<ResponsiveCheckResult> {
-  const targetSize = opts?.targetSize ?? 44;
+  const targetSize = opts?.targetSize ?? DEFAULT_TARGET_SIZE;
   const visibleOnly = opts?.visibleOnly ?? false;
   const sampleContrast = opts?.contrast ?? false;
   const contrastLimit = opts?.contrastLimit;
@@ -380,6 +384,7 @@ export async function runResponsiveCheck(
                 height: number;
                 inlineExempt: boolean;
               }> = [];
+              let touchTargetsBelow44 = 0;
 
               if (args.doCheckTouchTargets) {
                 const clickableSelector =
@@ -388,6 +393,14 @@ export async function runResponsiveCheck(
                   if (isSrOnly(el) || isFocusOnly(el) || isHidden(el)) continue; // not a real tap target
                   if (args.filterVisible && isFaded(el)) continue;
                   const rect = el.getBoundingClientRect();
+                  if (
+                    rect.width > 0 &&
+                    rect.height > 0 &&
+                    (rect.width < 44 || rect.height < 44) &&
+                    !isInlineLink(el)
+                  ) {
+                    touchTargetsBelow44++;
+                  }
                   if (
                     rect.width > 0 &&
                     rect.height > 0 &&
@@ -460,6 +473,7 @@ export async function runResponsiveCheck(
                 hasHorizontalOverflow,
                 overflowCulprits,
                 touchTargetDetails,
+                touchTargetsBelow44,
                 tinyTextDetails,
                 pageHeight,
               };
@@ -536,6 +550,7 @@ export async function runResponsiveCheck(
             scrollWidth: metrics.scrollWidth,
             overflowCulprits: metrics.overflowCulprits,
             smallTouchTargets: nonExemptTargets.length,
+            touchTargetsBelow44: metrics.touchTargetsBelow44,
             smallTextLinks: metrics.touchTargetDetails.length - nonExemptTargets.length,
             tinyText: metrics.tinyTextDetails.length,
             pageHeight: metrics.pageHeight,
@@ -642,6 +657,13 @@ function aggregateContrast(breakpoints: BreakpointResult[]): AggContrast[] {
   return [...map.values()];
 }
 
+function aaaAdvisoryLine(bps: BreakpointResult[]): string | undefined {
+  const parts = bps
+    .filter((b) => (b.touchTargetsBelow44 ?? 0) > 0)
+    .map((b) => `${b.width}px ${b.touchTargetsBelow44}`);
+  return parts.length ? `AAA advisory (< 44px, not counted): ${parts.join(' · ')}` : undefined;
+}
+
 /**
  * Format responsive check results.
  */
@@ -650,13 +672,14 @@ export function formatResponsiveCheck(
   opts: { compact?: boolean; limit?: number } = {},
 ): string {
   const compact = opts.compact ?? false;
-  const targetSize = result.targetSize ?? 44;
+  const targetSize = result.targetSize ?? DEFAULT_TARGET_SIZE;
   // Compact list cap — raise with --limit; the full list is always in the non-compact section.
   const limit = opts.limit ?? 5;
 
   if (compact) {
+    const adv = aaaAdvisoryLine(result.breakpoints);
     if (result.totalIssues === 0) {
-      return '## Responsive: No issues\n';
+      return '## Responsive: No issues\n' + (adv ? adv + '\n' : '');
     }
     const lines: string[] = [`## Responsive: ${result.totalIssues} issue(s)`];
     for (const bp of result.breakpoints) {
@@ -683,6 +706,7 @@ export function formatResponsiveCheck(
     if (aggNonExempt.length > limit) {
       lines.push(`  … and ${aggNonExempt.length - limit} more (raise with --limit N)`);
     }
+    if (adv) lines.push(adv);
     lines.push('');
     return lines.join('\n');
   }
@@ -690,6 +714,7 @@ export function formatResponsiveCheck(
   const lines: string[] = ['## Responsive Check\n'];
 
   const hasContrast = result.breakpoints.some((bp) => bp.contrastAaFailures !== undefined);
+  const adv = aaaAdvisoryLine(result.breakpoints);
 
   // Summary table
   lines.push(
@@ -726,6 +751,7 @@ export function formatResponsiveCheck(
 
   if (allIssues.length === 0 && overflowBps.length === 0) {
     lines.push('No responsive issues detected.\n');
+    if (adv) lines.push(adv + '\n');
     return lines.join('\n');
   }
 
@@ -763,6 +789,11 @@ export function formatResponsiveCheck(
         `- MEDIUM: Touch target ${t.width}x${t.height}px — <${t.tag}${cls}> "${t.text}"${bpNote(t.breakpoints)}`,
       );
     }
+    lines.push('');
+  }
+
+  if (adv) {
+    lines.push(adv);
     lines.push('');
   }
 

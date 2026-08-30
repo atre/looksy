@@ -25,6 +25,7 @@ import {
   formatBrief,
   briefIsRed,
   isRed,
+  formatOverwriteNote,
 } from './cli-output.js';
 import { handleSubcommand } from './cli-subcommands.js';
 import {
@@ -42,6 +43,7 @@ import {
   parseCrop,
   applyFleetDefaults,
   resolveConsentMode,
+  newestMtimeMs,
 } from './cli-utils.js';
 
 // Re-exported for external consumers (tests import from dist/cli.js)
@@ -129,6 +131,7 @@ async function main(): Promise<void> {
       'text-on': { type: 'string' },
       'bg-tokens': { type: 'string' },
       'storage-state': { type: 'string' },
+      'save-storage-state': { type: 'string' },
       'basic-auth': { type: 'string' },
       compare: { type: 'string' },
       pdf: { type: 'boolean', default: false },
@@ -197,8 +200,9 @@ async function main(): Promise<void> {
   });
 
   if (values.help) {
-    printHelp();
-    process.exit(0);
+    const q = positionals[0];
+    const ok = printHelp(q && /^[a-z][a-z-]*$/i.test(q) ? q : undefined);
+    process.exit(ok ? 0 : 1);
   }
 
   if (values.version) {
@@ -325,7 +329,7 @@ export function applyCompoundFlags(values: Record<string, any>): void {
     values.suggest = true;
     // Mobile-aware gate: responsive-check runs at 375/768/1440 (touch targets, overflow,
     // tiny text) and — because --contrast is on — also samples contrast per breakpoint,
-    // covering the mobile contrast + 44px touch-target rules the desktop pass alone misses.
+    // covering the mobile contrast + 24px (AA) touch-target rules the desktop pass alone misses.
     values['responsive-check'] = true;
     // Default --design-audit's contrast sample well past typical page element counts so the
     // gate doesn't silently pass on an unchecked remainder; an explicit --contrast-limit wins.
@@ -505,6 +509,7 @@ async function runCaptureFlow(
       : validateNumeric('limit', values.limit)
     : undefined;
   const storageState = values['storage-state'];
+  const saveStorageState = values['save-storage-state'];
   const basicAuth = values['basic-auth'];
   const compare = values.compare;
   const pdf = values.pdf ?? false;
@@ -616,6 +621,7 @@ async function runCaptureFlow(
     metaMd,
     brief: values.brief ?? false,
     storageState,
+    saveStorageState,
     basicAuth,
     har,
     coverage,
@@ -982,11 +988,18 @@ async function runCaptureFlow(
         values.output ?? (format === 'jpeg' ? `${LOOKSY_DIR}/preview.jpg` : DEFAULT_OUTPUT),
         suffix,
       );
+      const usesDefaultPath = !values.output && !suffix;
+      const prevDefaultMtime = usesDefaultPath
+        ? newestMtimeMs([output, output.replace(/\.(png|jpg|jpeg)$/, '.meta.md')])
+        : undefined;
       const result = await screenshot(buildConfig(output));
       if (values.brief) {
         printBrief([{ url, result }]);
       } else {
         printResult(result, { quiet: values.quiet });
+        if (prevDefaultMtime !== undefined && !values.quiet) {
+          console.log(formatOverwriteNote(prevDefaultMtime, Date.now()));
+        }
       }
 
       if (values['diff-inline'] && !values.brief) {

@@ -4,6 +4,20 @@ import { pathToFileURL } from 'node:url';
 import { viewports } from './viewports.js';
 import { loadFleetConfig, expandFleetTargets } from './fleet-config.js';
 
+/** Newest mtime (ms) among the paths that exist, or undefined when none does. */
+export function newestMtimeMs(paths: string[]): number | undefined {
+  let best: number | undefined;
+  for (const p of paths) {
+    try {
+      const m = statSync(p).mtimeMs;
+      if (best === undefined || m > best) best = m;
+    } catch {
+      /* missing */
+    }
+  }
+  return best;
+}
+
 /** Validate that a CLI flag value is a finite integer. Exits with error if not. */
 export function validateNumeric(flag: string, raw: string): number {
   const n = Number(raw);

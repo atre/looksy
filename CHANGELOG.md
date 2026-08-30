@@ -19,11 +19,18 @@ All notable changes to looksy are documented here. Format follows [Keep a Change
 - Broken `<img>` entries in `## Broken Images` are labeled `blocked (CSP or ad-blocker?)` vs the actual failure reason (status/error text), and `--suggest` splits blocked-by-CSP images out of the broken-image count
 - `diff <url> <name>` prints a `baseline saved YYYY-MM-DD HH:MM (Nd/Nh ago)` line
 - `--urls`/fleet filenames for loopback hosts (`localhost`, `127.0.0.1`, `[::1]`) now carry the port (`preview-localhost-4321-de.png`) so two local apps on different ports don't collide
+- `--help <section>` — print one help section (`--help batch`, `--help auth`); plain `--help` now starts with a `Sections:` index line
+- `--save-storage-state <path>` — write the context's cookies + localStorage after the run, for replay with `--storage-state`
+- Page line shows `· scrollY: <px>` when the capture was taken at a scroll offset
+- `note: replaced previous default capture (written HH:MM:SS, <age> ago)` after a capture that overwrote the default `preview.png`/`.meta.md`
+- Batch report summary names `robots.txt disallows all (Disallow: /)` once, site-level; verbose SEO audit flags it
+- Responsive check reports an `AAA advisory (< 44px, not counted)` count next to the AA touch-target result
 
 ### Fixed
 
 - `--brief` alone exited 0 on a red result (e.g. HTTP 404) instead of 1 — any printed `✗` line now sets exit 1
 - `-q` still printed the `Tip: looksy --serve …` stderr hint on every run — suppressed under quiet/brief
+- Batch report `SEO Issues` counted `no-og-title` on every page (read `og.title` instead of `og:title`)
 
 ### Changed
 
@@ -33,6 +40,8 @@ All notable changes to looksy are documented here. Format follows [Keep a Change
 - `diff <url> <name> -o <path>` now names the saved capture instead of the diff image; the diff image lands at `<path>-diff.png` beside it
 - `fleet … --design-audit` now defaults `--fail-only` on (opt out with `--no-fail-only`)
 - Broken/oversized/missing-alt image names in `--suggest`, the oversized-image hint, and `--check "no-broken-images"` are now the full `src` instead of a truncated basename
+- Touch-target FAIL threshold defaults to 24 px (WCAG 2.2 SC 2.5.8 AA) — was 44 px (SC 2.5.5 AAA / HIG); `--target-size 44` restores the old bar; batch column is now `Touch Targets (AA)`
+- Same-origin `/cdn-cgi/` (Cloudflare-injected) asset failures no longer trip the ⚠ failed-asset line or `--check assets-ok`; counted as `(+N cloudflare-injected ignored)`
 
 ## [0.2.0] — 2026-08-17
 

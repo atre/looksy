@@ -3,6 +3,16 @@ import type { CheckResult } from './check.js';
 import { formatIdleTimeoutNote } from './navigate.js';
 import { formatFailedRequests } from './failed-requests.js';
 
+export function formatOverwriteNote(prevMtimeMs: number, nowMs: number): string {
+  const d = new Date(prevMtimeMs);
+  const hh = String(d.getHours()).padStart(2, '0'),
+    mm = String(d.getMinutes()).padStart(2, '0'),
+    ss = String(d.getSeconds()).padStart(2, '0');
+  const s = Math.max(0, Math.round((nowMs - prevMtimeMs) / 1000));
+  const age = s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h`;
+  return `note: replaced previous default capture (written ${hh}:${mm}:${ss}, ${age} ago)`;
+}
+
 /** Check contrast results: print failing elements to stderr and exit with code 1 if triggered */
 export function checkContrastExit(
   results: ScreenshotResult[],
@@ -64,7 +74,8 @@ export function formatPageLine(result: ScreenshotResult): string | undefined {
   // scroll) but nobody notices unless they compare it to the flag they passed — say it.
   const over = viewportWidth ? formatOverflowFlag(width, viewportWidth) : '';
   const scheme = result.scheme ? ` · scheme: ${result.scheme}` : '';
-  return `Page: ${width}x${height}px${scheme}${over}${title ? ` "${title}"` : ''}${timing}`;
+  const scroll = result.scrollY ? ` · scrollY: ${result.scrollY}px` : '';
+  return `Page: ${width}x${height}px${scheme}${scroll}${over}${title ? ` "${title}"` : ''}${timing}`;
 }
 
 export function printResult(result: ScreenshotResult, opts: PrintOptions = {}): void {
@@ -74,7 +85,8 @@ export function printResult(result: ScreenshotResult, opts: PrintOptions = {}): 
   const checksOnly = quiet && !!result.checkResults;
   const pageLine = formatPageLine(result);
   if (pageLine) console.log(pageLine);
-  if (result.failedRequests?.length) console.log(formatFailedRequests(result.failedRequests));
+  if (result.failedRequests?.length)
+    console.log(formatFailedRequests(result.failedRequests, result.failedRequestsIgnored ?? 0));
   if (result.pageInfo?.overflowCulprits) {
     for (const c of result.pageInfo.overflowCulprits) {
       console.log(`  overflow: ${c.tag} right=${c.right}px "${c.text}"`);
@@ -94,6 +106,7 @@ export function printResult(result: ScreenshotResult, opts: PrintOptions = {}): 
   }
   if (result.metaPath && !quiet) console.log(result.metaPath);
   if (result.jsonPath && !quiet) console.log(result.jsonPath);
+  if (result.storageStatePath && !quiet) console.log(`storage state: ${result.storageStatePath}`);
   // One-line analyzer summaries for shell/CI/agent use (full detail lives in the sidecar)
   if (result.analysisSummaries && !checksOnly) {
     for (const s of result.analysisSummaries) console.log(s);

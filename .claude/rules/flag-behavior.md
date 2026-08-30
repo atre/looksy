@@ -66,6 +66,7 @@ Complete specification of all CLI flag behaviors, assertion grammars, and output
 **-o path**
 - Custom output path (any location, no suffix logic)
 - `-o dir/` (trailing slash, or an existing directory) in batch mode (`fleet` / `--urls` / `--pages`): switches from "last URL wins one file" to one `preview-<slug>.png` + sidecar per URL inside that dir (created if missing); `batch-report.md` lands there too. Same effect as `--output-dir`
+- Without -o/--name the default `preview.png`/`.meta.md` is overwritten; the run prints `note: replaced previous default capture (written HH:MM:SS, <age> ago)` when it did
 
 **--name SUFFIX** (alias: --suffix)
 - Suffix output: preview-SUFFIX.png
@@ -149,6 +150,7 @@ Grammar: `click:.sel | wait:ms | scroll:px | scroll-to:.sel | type:.sel=text | h
 - Works with --design and analysis flags
 - `--pages @sitemap` (exact literal, case-sensitive): reads `<origin>/sitemap.xml` instead of a manual list — a `<urlset>` yields pages directly, a `<sitemapindex>` fetches each nested sitemap (capped at 20) and concatenates their pages; same-origin `<loc>` entries collapse to `pathname+search`, cross-origin entries stay absolute
 - `--pages-limit N`: caps the final expanded page list to N entries — applies after `@sitemap` expansion and after `--locales` cross-product, regardless of source (a plain `--pages "/,/a,/b" --pages-limit 2` is also capped to 2)
+- Catalog-size sitemaps: budget minutes (background the run) or use `--pages-limit N` for a first pass
 
 **--concurrency N**
 - Limit parallel captures (default: 3 with --design, unlimited otherwise)
@@ -404,7 +406,7 @@ Each active analyzer also echoes a one-line summary to stdout (in addition to th
 - Focus-only detection also catches skip links that aren't clipped: class matching `skip-link`/`skip-to`/`skip-nav`, `offsetParent === null` (and not `position: fixed`), or a bounding box fully off-viewport (`right <= 0` or `bottom <= 0`)
 - An `<a>` inside `nav`, `[role="navigation"]`, or `header` is always a control — reported as `nav a` — never inline-exempt, even when laid out `display: inline`
 - Findings are **deduped across breakpoints**: a target (or contrast failure) flagged at both 375px and 768px collapses to one finding listing the breakpoints (`— at 375px, 768px`), so counts aren't double-inflated
-- `--target-size N`: custom threshold (default 44 = AAA, use 24 for AA)
+- `--target-size N`: custom threshold (default 24 = WCAG 2.2 AA, use 44 for AAA/HIG)
 - `--visible-only`: skip sr-only/hidden elements
 - **Inline text links are exempt and reported separately** (WCAG 2.5.8 inline exception): any `<a>` with computed `display: inline` (breadcrumb crumbs, footer link lists, tag chips rendered as plain text) or an `<a>` inside a text run. They appear under "Inline Text Links < Npx (exempt — not counted)"; the failure count is controls only, e.g. `3 controls smaller than 44px minimum (+12 inline text links, exempt)`
 - Overflow findings state the amount: `Horizontal overflow: page 396px is 21px wider than the 375px viewport`
@@ -488,7 +490,7 @@ Grammar (comma-separated):
 - `unique-footer` / `unique-nav` — footer/nav presence (use with --pages for cross-page consistency)
 - `class:<name>` — some element has a class containing `<name>` (the old implicit fallback, now explicit)
 - `no-hscroll` — document not wider than the viewport; detail: `page 396px vs viewport 375px (+21px horizontal scroll)`
-- `touch-targets[:N]` — no control (a/button/input/select/textarea/role=button|link|menuitem) smaller than N px (default 44); inline `<a>` (display:inline) and sr-only elements exempt; lists the first 5 offenders
+- `touch-targets[:N]` — no control (a/button/input/select/textarea/role=button|link|menuitem) smaller than N px (default 24); inline `<a>` (display:inline) and sr-only elements exempt; lists the first 5 offenders
 - `h1-count[:N]` — exactly N `<h1>` (default 1), display:none/aria-hidden ignored; lists the h1 texts
 - `heading-outline` — no skipped levels among screen-reader-visible headings; names both headings per skip
 - `no-broken-images` — no `<img>` whose load finished with `naturalWidth === 0`; not-yet-loaded lazy images are not broken
@@ -566,6 +568,9 @@ Grammar (comma-separated):
 **--storage-state ./auth.json**
 - Use Playwright storage state file
 
+**--save-storage-state ./auth.json**
+- After the capture (and any --interact steps), write the context's cookies + localStorage as a Playwright storage-state file; replay with --storage-state. Prints `storage state: <path>`
+
 **--basic-auth user:pass**
 - HTTP Basic auth
 
@@ -575,6 +580,7 @@ Every capture prints `Page: WxHpx "title" (t s)`. When the document is wider tha
 the line says so explicitly — `Page: 396x3196px ⚠ hscroll +21px wider than 375px viewport`, followed by `  overflow: table right=525px "…"` lines naming the top-3 culprits —
 so a mobile layout bug isn't something you only notice by comparing the width to the flag you passed.
 Gate it in CI with `--check "no-hscroll"`.
+- `· scrollY: 2000px` appears when the capture was taken at a scroll offset (e.g. `--interact "scroll:2000,wait:200" --fold` to verify sticky/fixed elements); absent at the top of the page
 
 ## Output Naming Convention
 

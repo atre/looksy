@@ -2,7 +2,7 @@ import type { Page } from 'playwright';
 
 export interface SeoData {
   /** robots.txt status and content summary */
-  robotsTxt: { exists: boolean; content?: string; lines?: number };
+  robotsTxt: { exists: boolean; content?: string; lines?: number; disallowAll?: boolean };
   /** sitemap.xml status */
   sitemap: { exists: boolean; url?: string; urlCount?: number };
   /** Open Graph tags */
@@ -23,6 +23,10 @@ export interface SeoData {
   schemaTypes: string[];
   /** Favicon */
   favicon: string | null;
+}
+
+export function parseRobotsDisallowAll(text: string): boolean {
+  return /^\s*disallow:\s*\/\s*$/im.test(text);
 }
 
 /**
@@ -123,7 +127,12 @@ export async function extractSeo(page: Page): Promise<SeoData> {
     if (robotsRes.ok) {
       const text = await robotsRes.text();
       const lines = text.split('\n').filter((l) => l.trim()).length;
-      robotsTxt = { exists: true, content: text.slice(0, 500), lines };
+      robotsTxt = {
+        exists: true,
+        content: text.slice(0, 500),
+        lines,
+        disallowAll: parseRobotsDisallowAll(text),
+      };
       // Check for sitemap reference
       const sitemapMatch = text.match(/Sitemap:\s*(.+)/i);
       if (sitemapMatch) {
@@ -216,6 +225,7 @@ export function formatSeo(
   lines.push('\n### robots.txt\n');
   if (data.robotsTxt.exists) {
     lines.push(`Found (${data.robotsTxt.lines} directives)`);
+    if (data.robotsTxt.disallowAll) lines.push('⚠ Disallow: / — site blocked from indexing');
   } else {
     lines.push('Not found');
   }

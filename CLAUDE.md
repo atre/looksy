@@ -62,4 +62,5 @@ npm install && npm run build && npm link    # Build + global install
 npm test                                     # tsc + vitest
 npx vitest run                               # Tests only
 npx vitest                                   # Watch mode
+snuff --tag fast                             # unit gate only (~5 s); plain snuff = full DoD
 ```

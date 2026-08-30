@@ -58,7 +58,8 @@ export const CHECK_ASSERTIONS: Array<{ syntax: string; description: string }> = 
   },
   {
     syntax: 'touch-targets[:N]',
-    description: 'no control smaller than N px (default 44; inline text links exempt)',
+    description:
+      'no control smaller than N px (default 24 = WCAG 2.2 AA; 44 = AAA; inline text links exempt)',
   },
   { syntax: 'h1-count[:N]', description: 'exactly N <h1> (default 1)' },
   { syntax: 'heading-outline', description: 'no skipped heading levels (hidden headings ignored)' },
@@ -738,7 +739,7 @@ export async function runChecksStructured(
 
               // "touch-targets[:N]" — no control smaller than N px (inline text links exempt, WCAG 2.5.8)
               if (lower === 'touch-targets' || lower.startsWith('touch-targets:')) {
-                const min = lower.includes(':') ? parseInt(lower.split(':')[1], 10) || 44 : 44;
+                const min = lower.includes(':') ? parseInt(lower.split(':')[1], 10) || 24 : 24;
                 const small: string[] = [];
                 let checked = 0;
                 for (const el of document.querySelectorAll(

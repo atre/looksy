@@ -41,6 +41,7 @@ import { prepareContext, dismissConsent } from './page-prep.js';
 import {
   isTrackedAssetType,
   isSameOrigin,
+  isInjectedAsset,
   classifyBrokenImage,
   type FailedRequest,
 } from './failed-requests.js';
@@ -180,9 +181,18 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
     });
 
     const failedRequests: FailedRequest[] = [];
+    let injectedFailed = 0;
     // Chromium fires both 'response' (with a >=400 status) and 'requestfailed' (ERR_ABORTED)
     // for the same URL when e.g. a <link rel=stylesheet> 404s — dedupe by URL, first wins.
     page.on('requestfailed', (req) => {
+      if (
+        isTrackedAssetType(req.resourceType()) &&
+        isSameOrigin(req.url(), config.url) &&
+        isInjectedAsset(req.url())
+      ) {
+        injectedFailed++;
+        return;
+      }
       if (
         isTrackedAssetType(req.resourceType()) &&
         isSameOrigin(req.url(), config.url) &&
@@ -197,6 +207,15 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
     });
     page.on('response', (resp) => {
       const req = resp.request();
+      if (
+        resp.status() >= 400 &&
+        isTrackedAssetType(req.resourceType()) &&
+        isSameOrigin(resp.url(), config.url) &&
+        isInjectedAsset(resp.url())
+      ) {
+        injectedFailed++;
+        return;
+      }
       if (
         resp.status() >= 400 &&
         isTrackedAssetType(req.resourceType()) &&
@@ -338,10 +357,12 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
     if (httpStatus !== undefined) result.httpStatus = httpStatus;
     if (idleTimedOut) result.networkIdleTimeout = true;
     if (failedRequests.length) result.failedRequests = failedRequests;
+    if (injectedFailed) result.failedRequestsIgnored = injectedFailed;
     // jsonData is the in-memory bus between analyzers and --suggest/--budget; without it,
     // --design's suggestions silently saw only contrast pairs unless --json was also on.
     if (config.json || config.suggest || config.budget) result.jsonData = {};
     if (result.jsonData && failedRequests.length) result.jsonData.failedRequests = failedRequests;
+    if (result.jsonData && injectedFailed) result.jsonData.failedRequestsIgnored = injectedFailed;
     const compact = config.compact ?? false;
 
     const visualFlags =
@@ -397,6 +418,9 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
     if ((config.stabilize ?? true) && !filmstripActive) {
       await safeRun(() => stabilizePage(page), consoleErrors, 'Stabilize');
     }
+
+    const scrollYAtCapture = await page.evaluate(() => Math.round(window.scrollY));
+    if (scrollYAtCapture > 0) result.scrollY = scrollYAtCapture;
 
     if (!textOnly && !config.pdf) {
       const outcome = await captureMainScreenshot(
@@ -793,6 +817,12 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
       } catch {
         /* best-effort */
       }
+    }
+
+    if (config.saveStorageState) {
+      const statePath = resolve(config.saveStorageState);
+      await context.storageState({ path: statePath });
+      result.storageStatePath = statePath;
     }
 
     await context.close();

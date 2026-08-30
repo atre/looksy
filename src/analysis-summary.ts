@@ -130,7 +130,7 @@ export function summarize(key: string, data: any, opts?: { limit?: number }): st
         if (bp.hasHorizontalOverflow)
           bits.push(`hscroll${bp.scrollWidth ? ` +${bp.scrollWidth - bp.width}px` : ''}`);
         if (bp.smallTouchTargets > 0)
-          bits.push(`${bp.smallTouchTargets} controls < ${data.targetSize ?? 44}px`);
+          bits.push(`${bp.smallTouchTargets} controls < ${data.targetSize ?? 24}px`);
         if (bp.tinyText > 0) bits.push(`${bp.tinyText} tiny text`);
         if (bp.contrastAaFailures) bits.push(`${bp.contrastAaFailures} AA fail`);
         return `${bp.width}px ${bits.length ? bits.join(', ') : 'ok'}`;
