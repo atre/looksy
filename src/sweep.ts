@@ -1,5 +1,6 @@
 import { screenshot, type ScreenshotConfig } from './screenshot.js';
 import { connectOrLaunch } from './server.js';
+import { touchEmulationFor } from './viewports.js';
 
 const DEFAULT_BREAKPOINTS = [
   { name: '320', width: 320, height: 568, label: 'iPhone SE' },
@@ -23,7 +24,7 @@ export interface SweepResult {
     path: string;
     metaPath?: string;
     /** Document size at this breakpoint — width > breakpoint width means horizontal scroll. */
-    pageInfo?: { width: number; height: number; title: string };
+    pageInfo?: { width: number; height: number; title: string; emulation?: { hasTouch?: boolean } };
     /** AA/AAA contrast failure counts when --contrast ran. */
     contrastFailures?: { aa: number; aaa: number };
     /** One-line analyzer summaries (same as single-capture stdout). */
@@ -66,6 +67,7 @@ export async function responsiveSweep(
             ...baseConfig,
             width: bp.width,
             height: bp.height,
+            emulation: touchEmulationFor(bp.width),
             output,
             browser,
           });

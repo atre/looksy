@@ -26,6 +26,8 @@ const HINTS: Record<string, string> = {
   contrast: '--design',
   'heading-outline': '--design',
   'touch-targets': '--design-audit',
+  'input-zoom': '--mobile',
+  'hover-nav': '--mobile',
 };
 
 /** `contrast:aa` → `contrast`, `touch-targets:32` → `touch-targets`, `no-hscroll` → `no-hscroll`. */

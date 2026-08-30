@@ -6,6 +6,12 @@ All notable changes to looksy are documented here. Format follows [Keep a Change
 
 ### Added
 
+- `--mobile` / `--tablet` now emulate a real device (iPhone 14 / iPad gen 7 UA, DPR 3 / 2, `isMobile`, `hasTouch` → `hover:none`, `pointer:coarse`, 3× `srcset`); every capture is 1 image px per CSS px (`scale:'css'`), so PNG sizes and AI-read cost are unchanged — re-save mobile baselines once
+- `--device <name>` / `--list-devices` — any Playwright device descriptor (own viewport + emulation)
+- `--sweep` / `--responsive-check` breakpoints ≤ 768px run with `hasTouch`; Page line shows `· device: … @3x touch` / `· touch`, and warns `⚠ no <meta name=viewport>` under mobile emulation
+- `--interact "tap:.sel"` (needs a touch context) and `"swipe:<dir>[=px]"` / `"swipe:.sel=<dir>[=px]"` (CDP touch events; drives touch listeners and native carousels)
+- `--check "input-zoom"` — text-like form controls below 16px (iOS focus zoom); auto-added to `--design-audit` on mobile/tablet/device captures
+- `--check "hover-nav"` — nav submenus revealed only by `:hover` (dead on touch); opt-in
 - `--motion` — animation/transition audit (`document.getAnimations()` inventory + capped computed-style transition scan): flags layout-property transitions (jank risk), infinite animations, durations > 1000ms, and probes `prefers-reduced-motion`
 - `--reduced-motion` — emulate `prefers-reduced-motion: reduce` for the whole capture
 - `--check "reduced-motion"` — fails if any animation still runs > 50ms under `prefers-reduced-motion`
@@ -30,9 +36,13 @@ All notable changes to looksy are documented here. Format follows [Keep a Change
 - `note: replaced previous default capture (written HH:MM:SS, <age> ago)` after a capture that overwrote the default `preview.png`/`.meta.md`
 - Batch report summary names `robots.txt disallows all (Disallow: /)` once, site-level; verbose SEO audit flags it
 - Responsive check reports an `AAA advisory (< 44px, not counted)` count next to the AA touch-target result
+- `--budget-samples <n>` — median-of-N budget gating (n ≥ 2, requires `--budget`); kills single-shot jitter against a CDN, reports min/median/max per metric
+- `--budget` keys that need an analyzer now imply it (`totalJS` → `--bundles`, `totalImages`/`imageCount` → `--images`); `totalCSS` is now actually measured (sum of external `.css` resources — was a dead key that always passed)
 
 ### Fixed
 
+- Concurrent `looksy --html` invocations corrupted each other: stdin HTML was written to a shared `~/.looksy/_pipe.html`, so one process could capture another's page — the temp file is now per-process (`_pipe-<pid>.html`), and files older than 1 h left by killed processes are swept on the next `--html` run
+- A budgeted metric that was never computed passed vacuously against 0 (`--budget totalJS:200KB` without `--speed`/`--bundles` printed `Total JS: 0 B` and exited 0) — it now FAILs as `not measured`, which can flip previously-green CI invocations to exit 1
 - `--brief` alone exited 0 on a red result (e.g. HTTP 404) instead of 1 — any printed `✗` line now sets exit 1
 - `-q` still printed the `Tip: looksy --serve …` stderr hint on every run — suppressed under quiet/brief
 - Batch report `SEO Issues` counted `no-og-title` on every page (read `og.title` instead of `og:title`)

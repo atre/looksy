@@ -2,7 +2,8 @@ import { parseArgs } from 'node:util';
 import { existsSync, mkdirSync } from 'node:fs';
 import { resolve, dirname, basename, join } from 'node:path';
 import { screenshot, type ScreenshotResult } from './screenshot.js';
-import { viewports } from './viewports.js';
+import { loadBudgetConfig } from './budget.js';
+import { viewports, type Viewport, contextEmulationOpts } from './viewports.js';
 import { readStdin, htmlToTempUrl, cleanupTempHtml } from './html-pipe.js';
 import { diffInline } from './diff-inline.js';
 import { startWatch } from './watch.js';
@@ -75,6 +76,8 @@ async function main(): Promise<void> {
       width: { type: 'string' },
       height: { type: 'string' },
       viewport: { type: 'string' },
+      device: { type: 'string' },
+      'list-devices': { type: 'boolean', default: false },
       thumb: { type: 'string' },
       crop: { type: 'string' },
       selector: { type: 'string' },
@@ -193,6 +196,7 @@ async function main(): Promise<void> {
       'server-timing': { type: 'boolean', default: false },
       'image-optimizer': { type: 'boolean', default: false },
       budget: { type: 'string' },
+      'budget-samples': { type: 'string' },
       speed: { type: 'boolean', default: false },
       'design-audit': { type: 'boolean', default: false },
       'batch-report': { type: 'boolean', default: false },
@@ -219,6 +223,12 @@ async function main(): Promise<void> {
     } catch {
       console.log('unknown');
     }
+    process.exit(0);
+  }
+
+  if (values['list-devices']) {
+    const { devices } = await import('playwright');
+    console.log(Object.keys(devices).join('\n'));
     process.exit(0);
   }
 
@@ -301,6 +311,18 @@ export function applyCompoundFlags(values: Record<string, any>): void {
     values.suggest = true;
   }
 
+  // --budget keys that need an analyzer imply it — without the analyzer the metric
+  // is never computed and the check would fail as "not measured".
+  if (values.budget) {
+    try {
+      const bc = loadBudgetConfig(String(values.budget));
+      if (bc.totalJS !== undefined) values.bundles = true;
+      if (bc.totalImages !== undefined || bc.imageCount !== undefined) values.images = true;
+    } catch {
+      // bad file/grammar — the budget module reports it at capture time
+    }
+  }
+
   // --speed: all performance analysis in one flag
   if (values.speed) {
     values.perf = true;
@@ -338,7 +360,10 @@ export function applyCompoundFlags(values: Record<string, any>): void {
     // Default --design-audit's contrast sample well past typical page element counts so the
     // gate doesn't silently pass on an unchecked remainder; an explicit --contrast-limit wins.
     if (values['contrast-limit'] === undefined) values['contrast-limit'] = '400';
-    const auditChecks = 'no generator, self-hosted-fonts, contrast:aa';
+    const mobileCapture = !!(values.mobile || values.tablet || values.device);
+    const auditChecks = mobileCapture
+      ? 'no generator, self-hosted-fonts, contrast:aa, input-zoom'
+      : 'no generator, self-hosted-fonts, contrast:aa';
     values.check = values.check ? `${values.check}, ${auditChecks}` : auditChecks;
   }
 
@@ -565,6 +590,23 @@ async function runCaptureFlow(
   const serverTimingFlag = values['server-timing'] ?? false;
   const imageOptimizer = values['image-optimizer'] ?? false;
   const budgetFlag = values.budget;
+  let budgetSamplesFlag: number | undefined;
+  if (values['budget-samples'] !== undefined) {
+    if (!budgetFlag) {
+      console.error('looksy: --budget-samples requires --budget');
+      process.exit(1);
+    }
+    const n = Number(values['budget-samples']);
+    if (!Number.isFinite(n)) {
+      // Reuses validateNumeric's own error message/exit for a non-numeric value.
+      validateNumeric('budget-samples', values['budget-samples']);
+    }
+    if (!Number.isInteger(n) || n < 2) {
+      console.error('looksy: --budget-samples must be a whole number ≥ 2');
+      process.exit(1);
+    }
+    budgetSamplesFlag = n;
+  }
   const hostResolverRule = values['host-resolver'];
   if (hostResolverRule) {
     try {
@@ -651,6 +693,7 @@ async function runCaptureFlow(
     serverTiming: serverTimingFlag,
     imageOptimizer,
     budget: budgetFlag,
+    budgetSamples: budgetSamplesFlag,
     responsiveCheck,
     targetSize,
     tailwind,
@@ -659,7 +702,7 @@ async function runCaptureFlow(
     forceScreenshot,
   };
 
-  const buildConfig = (output: string, vpOverride?: { width: number; height: number }) => ({
+  const buildConfig = (output: string, vpOverride?: Viewport) => ({
     ...commonConfig,
     output,
     ...(vpOverride ?? vp),
@@ -696,6 +739,7 @@ async function runCaptureFlow(
       width: vp.width,
       height: vp.height,
       darkMode,
+      emulation: vp.emulation,
     });
     console.log(output);
     cleanup();
@@ -718,9 +762,11 @@ async function runCaptureFlow(
       await withBrowser(async (cBrowser) => {
         const ctxA = await cBrowser.newContext({
           viewport: { width: vp.width, height: vp.height },
+          ...contextEmulationOpts(vp.emulation),
         });
         const ctxB = await cBrowser.newContext({
           viewport: { width: vp.width, height: vp.height },
+          ...contextEmulationOpts(vp.emulation),
         });
         try {
           const [pageA, pageB] = await Promise.all([ctxA.newPage(), ctxB.newPage()]);
@@ -786,7 +832,8 @@ async function runCaptureFlow(
       // One line per breakpoint with the number that matters most: horizontal overflow.
       const p = s.pageInfo;
       const over = p ? formatOverflowFlag(p.width, s.width) : '';
-      const dims = p ? ` page ${p.width}x${p.height}px${over}` : '';
+      const touch = p?.emulation?.hasTouch ? ' · touch' : '';
+      const dims = p ? ` page ${p.width}x${p.height}px${touch}${over}` : '';
       const aa = s.contrastFailures ? ` | contrast ${s.contrastFailures.aa} AA fail` : '';
       console.log(`${s.breakpoint}px (${s.label}):${dims}${aa}`);
       if (!values.quiet) console.log(`  ${s.path}`);
@@ -839,7 +886,10 @@ async function runCaptureFlow(
     const output = applySuffix(values.output ?? DEFAULT_OUTPUT, suffix);
     const { browser } = await connectOrLaunch();
     try {
-      const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
+      const ctx = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+        ...contextEmulationOpts(vp.emulation),
+      });
       const page = await ctx.newPage();
       await navigateSafe(page, url, { timeout: 30000 });
       if (waitMs) await page.waitForTimeout(waitMs);
@@ -874,8 +924,14 @@ async function runCaptureFlow(
     let contextB: Awaited<ReturnType<typeof browser.newContext>> | null = null;
     try {
       const [urlA, urlB] = parts.map((p: string) => new URL(p, baseUrl).href);
-      contextA = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
-      contextB = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
+      contextA = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+        ...contextEmulationOpts(vp.emulation),
+      });
+      contextB = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+        ...contextEmulationOpts(vp.emulation),
+      });
       const [pageA, pageB] = await Promise.all([contextA.newPage(), contextB.newPage()]);
       await Promise.all([navigateSafe(pageA, urlA), navigateSafe(pageB, urlB)]);
       const [snapA, snapB] = await Promise.all([
@@ -1043,7 +1099,7 @@ async function runCaptureFlow(
 async function runPagesBatch(
   values: Record<string, any>,
   url: string,
-  buildConfig: (output: string, vpOverride?: { width: number; height: number }) => any,
+  buildConfig: (output: string, vpOverride?: Viewport) => any,
   contrastExit: (results: ScreenshotResult[]) => void,
   outputDir: string | undefined,
   format: 'jpeg' | 'png',
@@ -1201,7 +1257,7 @@ async function runPagesBatch(
 
 async function runUrlsBatch(
   values: Record<string, any>,
-  buildConfig: (output: string, vpOverride?: { width: number; height: number }) => any,
+  buildConfig: (output: string, vpOverride?: Viewport) => any,
   contrastExit: (results: ScreenshotResult[]) => void,
   outputDir: string | undefined,
   format: 'jpeg' | 'png',

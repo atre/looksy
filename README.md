@@ -270,6 +270,7 @@ looksy <url> --third-party --cache-audit           # Third-party impact + cachin
 looksy <url> --resource-hints                      # Preload/preconnect suggestions
 looksy <url> --budget "totalJS:200KB,FCP:1800"     # CI gate (exit 1 on failure)
 looksy <url> --budget budget.json                  # Budget from JSON file
+looksy <url> --budget "FCP:1800" --budget-samples 5 # Median of 5 navigations (kills CDN jitter)
 ```
 
 ### Cheap verification loop
@@ -301,10 +302,12 @@ looksy <url> --perf --meta                      # + Core Web Vitals (FCP, LCP, C
 looksy <url> -o ./screenshot.png                # Custom output path
 
 # Viewports
-looksy <url> --mobile                           # Mobile viewport (390x844)
-looksy <url> --tablet                           # Tablet viewport (768x1024)
+looksy <url> --mobile                           # 390x844 + iPhone 14 emulation (UA, DPR 3, touch) — PNG stays 390 wide
+looksy <url> --tablet                           # 768x1024 + iPad emulation
 looksy <url> --multi                            # Desktop + mobile in one shot (parallel)
 looksy <url> --width 1440 --height 900          # Custom viewport
+looksy <url> --device "Pixel 7"                 # Any Playwright device (looksy --list-devices)
+looksy <url> --mobile --check "input-zoom, hover-nav" --interact "tap:.menu-toggle"   # Mobile-only bugs: iOS focus zoom, hover-only nav, touch drawer
 
 # Output naming
 looksy <url> --suffix hero                      # Output: preview-hero.png
@@ -573,7 +576,8 @@ Writes `.meta.md` alongside the PNG with:
 | `--critical-path` | Critical rendering path (blocking resources, LCP, TTFB) | — |
 | `--resource-hints` | Resource hints audit (preload/preconnect suggestions) | — |
 | `--server-timing` | Server timing + TTFB breakdown (DNS/TCP/TLS/server) | — |
-| `--budget <config>` | Performance budget gate (exit code 1 on failure) | — |
+| `--budget <config>` | Performance budget gate (exit code 1 on failure); analyzer-fed keys auto-enable their analyzer, unmeasured metrics FAIL | — |
+| `--budget-samples <n>` | Gate `--budget` on the median of n navigations (n ≥ 2); reports min/median/max | — |
 | `fingerprint collect/compare` | Structural fingerprint, 0-100 similarity score (8 dimensions incl. inline script hashes) | — |
 | `fingerprint collect-batch` | Batch fingerprint collection from a directory | — |
 | `fingerprint diff` | Show what changed between two fingerprint versions | — |
@@ -655,6 +659,8 @@ The `--check` flag supports these patterns:
 | `class:<name>` | `--check "class:btn-primary"` | Some element has a class containing the name |
 | `no-hscroll` | `--check "no-hscroll"` | Page is not wider than the viewport (no horizontal scroll) |
 | `touch-targets[:N]` | `--check "touch-targets:24"` | No control smaller than N px (default 24); inline text links exempt |
+| `input-zoom` | `--check "input-zoom" --mobile` | No text-like form control below 16px (iOS Safari zooms on focus) |
+| `hover-nav` | `--check "hover-nav" --mobile` | No nav submenu reachable only via :hover |
 | `h1-count[:N]` | `--check "h1-count"` | Exactly N `<h1>` (default 1); hidden headings ignored |
 | `heading-outline` | `--check "heading-outline"` | No skipped heading levels; names both headings on failure |
 | `no-broken-images` | `--check "no-broken-images"` | No `<img>` failed to load (lazy not-yet-loaded ≠ broken) |

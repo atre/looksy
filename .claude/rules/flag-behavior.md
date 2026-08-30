@@ -13,10 +13,13 @@ Complete specification of all CLI flag behaviors, assertion grammars, and output
 
 ### Viewports & Capture Modes
 
-**--mobile | --tablet | --multi**
-- Mobile: 390x844
-- Tablet: 768x1024
-- Multi: captures both desktop and mobile with separate outputs
+**--mobile | --tablet | --multi | --device <name> | --list-devices**
+- Mobile: 390x844 + iPhone 14 emulation (iPhone UA, DPR 3, `isMobile`, `hasTouch` → `hover:none`/`pointer:coarse` true, 3× `srcset` candidates). Tablet: 768x1024 + iPad (gen 7) emulation (DPR 2, touch)
+- `--device "<Playwright name>"` — the descriptor's own viewport + emulation (`--list-devices` prints every name, landscape variants included); errors with `--mobile/--tablet/--width/--height/--viewport/--multi/--sweep`; unknown name → `unknown device "X" — see looksy --list-devices`
+- `--width`/`--height` on top of `--mobile`/`--tablet` keep the emulation at the custom size; `--viewport WxH` / bare `--width` carry no emulation
+- Every capture is 1 image px per CSS px (`scale:'css'`): a `--mobile` PNG is 390 wide at DPR 3, so AI-read token cost is unchanged while the page itself sees a real phone. Mobile baselines saved before this change will diff-noise once (3× images) — re-save them
+- Page line gains ` · device: iPhone 14 @3x touch`; `  ⚠ no <meta name=viewport> — real phones render this at 980px zoomed out` is printed under it when the page lacks a viewport meta (with `isMobile` Chromium lays such pages out at 980px, exactly like a phone)
+- Multi: captures both desktop and mobile with separate outputs (mobile leg emulated)
 
 **--full [--max-height N]**
 - Full page scroll capture (all content)
@@ -51,6 +54,7 @@ Complete specification of all CLI flag behaviors, assertion grammars, and output
 - Responsive breakpoints (default: 5 standard widths)
 - Custom widths via --sweep-widths
 - stdout: one line per breakpoint — `320px (iPhone SE): page 358x4936px ⚠ hscroll +38px wider than 320px viewport | contrast 0 AA fail` — the horizontal-overflow amount is the single most useful number a sweep produces, so it's explicit
+- Breakpoints ≤ 768px run with `hasTouch` only (touch media queries on, layout viewport untouched — a missing `<meta viewport>` does not change the hscroll numbers); their stdout line and Page line carry ` · touch`. Never inherits `--mobile`'s UA/DPR into the desktop widths
 
 **--sections**
 - Per-section screenshots (identified by headings/landmarks)
@@ -120,11 +124,13 @@ Complete specification of all CLI flag behaviors, assertion grammars, and output
 ### Interactions & Injection
 
 **--interact "cmd1,cmd2,..."**
-Grammar: `click:.sel | wait:ms | scroll:px | scroll-to:.sel | type:.sel=text | hover:.sel`
+Grammar: `click:.sel | tap:.sel | wait:ms | scroll:px | scroll-to:.sel | swipe:<dir>[=px] | swipe:.sel=<dir>[=px] | type:.sel=text | hover:.sel`
 - Multiple commands chained with commas
 - All selectors are CSS selectors
 - `type` requires `.sel=text` (selector=value)
 - Executed in order before capture
+- `tap` needs a touch context (`--mobile`, `--tablet`, `--device`) — otherwise `Interact failed: tap:.sel needs a touch context …` in the errors list; `swipe` does not (CDP touch events, dirs left/right/up/down, default 200px, from the viewport centre or the element's centre)
+- `hover` on a touch-emulated context still fires (mouse events are dispatched regardless) — use `--check hover-nav` to find hover-only UI, not `hover:`.
 
 **--inject "css"**
 - Inject CSS string before capture
@@ -367,6 +373,9 @@ Each active analyzer also echoes a one-line summary to stdout (in addition to th
 - Format: inline `"metric:value"` pairs or JSON file
 - Metrics: totalJS/CSS/Images/Transfer (size), FCP/LCP/TTFB (ms), CLS (decimal), imageCount/requestCount (int)
 - Exit 1 on failure
+- Analyzer-fed keys imply their analyzer: `totalJS` turns on `--bundles`, `totalImages`/`imageCount` turn on `--images` (their sections appear in the report). `totalCSS` is computed inside the budget check itself: sum of external `.css` resources — inline `<style>`/CSS-in-JS contribute 0
+- A budgeted metric that was never computed is a FAIL (`not measured — run with --speed/--bundles/--images`), never a pass against a phantom 0 — previously `--budget totalJS:200KB` without an analyzer printed `Total JS: 0 B` and exited 0
+- `--budget-samples <n>` (n ≥ 2, requires `--budget`): re-navigates n times — sample 1 reuses the main capture's perf, samples 2..n run on a separate page in the same context (so cookies/localStorage/consent-dismissal from this run still apply) — and gates on the median of FCP/LCP/CLS/TTFB/requestCount/totalTransfer; the report shows min/median/max per metric so run-to-run jitter is visible instead of hidden. `totalJS`/`totalCSS`/`totalImages`/`imageCount` are NOT resampled (one page's bundle/image analysis, not repeated per navigation)
 
 ### Design & Validation
 
@@ -430,6 +439,7 @@ Each active analyzer also echoes a one-line summary to stdout (in addition to th
 - Composable with --contrast, --a11y, other analysis flags
 - When combined with `--contrast`, also samples WCAG contrast at each breakpoint (adds a Contrast AA column + deduped failure list) — surfaces mobile-only contrast issues
 - Batch-report includes touch target and overflow columns
+- 375/768 contexts run with `hasTouch: true` (hover-only and `pointer: coarse` layouts measured as a phone sees them); 1440 does not
 
 **--components ".hero,.cta"**
 - Multi-element capture + grid composite
@@ -507,6 +517,8 @@ Grammar (comma-separated):
 - `class:<name>` — some element has a class containing `<name>` (the old implicit fallback, now explicit)
 - `no-hscroll` — document not wider than the viewport; detail: `page 396px vs viewport 375px (+21px horizontal scroll)`
 - `touch-targets[:N]` — no control (a/button/input/select/textarea/role=button|link|menuitem) smaller than N px (default 24); inline `<a>` (display:inline) and sr-only elements exempt; lists the first 5 offenders
+- `input-zoom` — no visible text-like form control (`input` except hidden/checkbox/radio/range/file/submit/button/reset/image/color, `select`, `textarea`) below 16px computed font-size; failure: `N/M controls < 16px: input[search] 14px "Search"; …`; `maximum-scale=1`/`user-scalable=no` does not pass it (named in the detail — blocks pinch-zoom on Android, WCAG 1.4.4); `--design-audit` appends it automatically on `--mobile`/`--tablet`/`--device` captures (not on `--multi`)
+- `hover-nav` — CSSOM scan for `:hover` rules that reveal a hidden `ul`/`[role=menu]`/`*menu*|*dropdown*|*submenu*|*flyout*` inside `nav`/`header`/`[role=navigation]` with no `:focus-within`/`:focus`/`[aria-expanded="true"]`/`.open`-style twin rule and no `button`/`[aria-expanded]`/`[aria-haspopup]`/`summary` sibling toggle; rules under `@media (hover: hover)` are skipped; all stylesheets cross-origin → `not probed` PASS; opt-in (heuristic), not in `--design-audit`
 - `h1-count[:N]` — exactly N `<h1>` (default 1), display:none/aria-hidden ignored; lists the h1 texts
 - `heading-outline` — no skipped levels among screen-reader-visible headings; names both headings per skip
 - `no-broken-images` — no `<img>` whose load finished with `naturalWidth === 0`; not-yet-loaded lazy images are not broken
@@ -597,6 +609,7 @@ the line says so explicitly — `Page: 396x3196px ⚠ hscroll +21px wider than 3
 so a mobile layout bug isn't something you only notice by comparing the width to the flag you passed.
 Gate it in CI with `--check "no-hscroll"`.
 - `· scrollY: 2000px` appears when the capture was taken at a scroll offset (e.g. `--interact "scroll:2000,wait:200" --fold` to verify sticky/fixed elements); absent at the top of the page
+- `· device: iPhone 14 @3x touch` under `--mobile`/`--tablet`/`--device` (`· touch` on sweep/responsive breakpoints ≤ 768); the `⚠ no <meta name=viewport>` line follows when a mobile-emulated page lacks one
 
 ## Output Naming Convention
 

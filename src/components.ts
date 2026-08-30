@@ -20,7 +20,10 @@ export async function captureComponents(
   selectors: string,
   outputPath: string,
 ): Promise<{ components: ComponentResult[]; gridPath: string }> {
-  const selectorList = selectors.split(',').map(s => s.trim()).filter(Boolean);
+  const selectorList = selectors
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const dir = dirname(outputPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
@@ -37,7 +40,7 @@ export async function captureComponents(
     if (!box || box.width < 1 || box.height < 1) continue;
 
     const compPath = outputPath.replace(/(\.[^.]+)$/, `-component-${i + 1}$1`);
-    const buf = await element.screenshot({ type: 'png' });
+    const buf = await element.screenshot({ type: 'png', scale: 'css' });
     writeFileSync(compPath, buf);
     buffers.push(buf);
     dimensions.push({ width: Math.round(box.width), height: Math.round(box.height) });
@@ -56,11 +59,11 @@ export async function captureComponents(
 
   if (buffers.length > 0) {
     const { PNG } = await loadPNG();
-    const pngs = buffers.map(buf => PNG.sync.read(buf));
+    const pngs = buffers.map((buf) => PNG.sync.read(buf));
 
     const cols = Math.min(2, pngs.length);
     const gap = 8;
-    const maxWidthPerCol = Math.max(...pngs.map(p => p.width));
+    const maxWidthPerCol = Math.max(...pngs.map((p) => p.width));
     const totalWidth = maxWidthPerCol * cols + gap * (cols - 1);
 
     // Calculate rows
@@ -78,7 +81,7 @@ export async function captureComponents(
     let totalHeight = 0;
     const rowHeights: number[] = [];
     for (const row of rows) {
-      const maxH = Math.max(...row.map(r => r.png.height));
+      const maxH = Math.max(...row.map((r) => r.png.height));
       rowHeights.push(maxH);
       totalHeight += maxH + gap;
     }
@@ -104,8 +107,8 @@ export async function captureComponents(
       for (let c = 0; c < row.length; c++) {
         const src = row[c].png;
         const offsetX = c * (maxWidthPerCol + gap);
-        for (let y = 0; y < src.height && (offsetY + y) < totalHeight; y++) {
-          for (let x = 0; x < src.width && (offsetX + x) < totalWidth; x++) {
+        for (let y = 0; y < src.height && offsetY + y < totalHeight; y++) {
+          for (let x = 0; x < src.width && offsetX + x < totalWidth; x++) {
             const srcIdx = (y * src.width + x) * 4;
             const dstIdx = ((offsetY + y) * totalWidth + offsetX + x) * 4;
             output.data[dstIdx] = src.data[srcIdx];

@@ -28,6 +28,7 @@ export async function captureMainScreenshot(
     path: opts.outputPath,
     fullPage: opts.fullPage,
     type: opts.format === 'jpeg' ? 'jpeg' : 'png',
+    scale: 'css',
   };
   if (opts.format === 'jpeg' && opts.quality) screenshotOpts.quality = opts.quality;
 

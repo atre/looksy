@@ -7,6 +7,8 @@ export interface ScreenshotConfig {
   output: string;
   width: number;
   height: number;
+  /** Device emulation passed to newContext (from --mobile/--tablet/--device or touchEmulationFor). */
+  emulation?: import('./viewports.js').DeviceEmulation;
   fullPage: boolean;
   selector?: string;
   selectorAll?: boolean;
@@ -93,6 +95,7 @@ export interface ScreenshotConfig {
   serverTiming?: boolean;
   imageOptimizer?: boolean;
   budget?: string;
+  budgetSamples?: number;
   timeout?: number;
   inject?: string;
   responsiveCheck?: boolean;
@@ -158,6 +161,14 @@ export interface ScreenshotResult {
     viewportWidth?: number;
     /** Top-3 elements/text causing the horizontal overflow (only set when width > viewportWidth). */
     overflowCulprits?: import('./responsive-check.js').OverflowCulprit[];
+    /** Set when the capture ran under device/touch emulation; viewportMeta = page has <meta name=viewport>. */
+    emulation?: {
+      device?: string;
+      deviceScaleFactor?: number;
+      isMobile?: boolean;
+      hasTouch?: boolean;
+      viewportMeta: boolean;
+    };
   };
   /** window.scrollY at capture time when > 0 (a --interact scroll or the page's own script moved it). */
   scrollY?: number;

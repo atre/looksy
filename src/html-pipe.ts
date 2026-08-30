@@ -1,9 +1,11 @@
-import { writeFileSync, mkdirSync, existsSync, unlinkSync } from 'node:fs';
+import { writeFileSync, mkdirSync, existsSync, unlinkSync, readdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { LOOKSY_DIR } from './utils.js';
 
 const TEMP_DIR = LOOKSY_DIR;
-const TEMP_HTML = resolve(TEMP_DIR, '_pipe.html');
+// Per-process filename: concurrent `looksy --html` invocations must not overwrite
+// each other's page (a shared _pipe.html made one process capture another's HTML).
+const TEMP_HTML = resolve(TEMP_DIR, `_pipe-${process.pid}.html`);
 
 /**
  * Read HTML from stdin (non-blocking check).
@@ -47,10 +49,30 @@ export function readStdin(timeoutMs = 5000): Promise<string | null> {
 /**
  * Write HTML content to a temp file and return its file:// URL.
  */
+/** Delete _pipe-*.html left by crashed/killed processes (cleanup only runs on the happy
+ *  path). The 1 h age gate keeps any live concurrent capture's file safe. */
+function sweepStalePipeFiles(): void {
+  try {
+    const cutoff = Date.now() - 60 * 60 * 1000;
+    for (const name of readdirSync(TEMP_DIR)) {
+      if (!/^_pipe-\d+\.html$/.test(name)) continue;
+      const path = resolve(TEMP_DIR, name);
+      try {
+        if (statSync(path).mtimeMs < cutoff) unlinkSync(path);
+      } catch {
+        // raced with another process — ignore
+      }
+    }
+  } catch {
+    // sweep is best-effort
+  }
+}
+
 export function htmlToTempUrl(html: string): string {
   if (!existsSync(TEMP_DIR)) {
     mkdirSync(TEMP_DIR, { recursive: true });
   }
+  sweepStalePipeFiles();
 
   // Wrap bare HTML snippets in a basic document
   let fullHtml = html;

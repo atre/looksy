@@ -66,11 +66,11 @@ describe('resolveViewport', () => {
   });
 
   it('returns mobile viewport', () => {
-    expect(resolveViewport({ mobile: true })).toEqual({ width: 390, height: 844 });
+    expect(resolveViewport({ mobile: true })).toMatchObject({ width: 390, height: 844 });
   });
 
   it('returns tablet viewport', () => {
-    expect(resolveViewport({ tablet: true })).toEqual({ width: 768, height: 1024 });
+    expect(resolveViewport({ tablet: true })).toMatchObject({ width: 768, height: 1024 });
   });
 
   it('overrides width only', () => {

@@ -2,12 +2,14 @@ import { connectOrLaunch } from './server.js';
 import { navigateSafe } from './navigate.js';
 import { mkdirSync, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { contextEmulationOpts, type DeviceEmulation } from './viewports.js';
 
 export interface RecordOptions {
   duration: number; // ms
   width: number;
   height: number;
   darkMode?: boolean;
+  emulation?: DeviceEmulation;
 }
 
 /**
@@ -28,6 +30,7 @@ export async function recordVideo(
       viewport: { width: opts.width, height: opts.height },
       colorScheme: opts.darkMode ? 'dark' : 'light',
       recordVideo: { dir, size: { width: opts.width, height: opts.height } },
+      ...contextEmulationOpts(opts.emulation),
     });
 
     const page = await context.newPage();

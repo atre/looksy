@@ -144,3 +144,26 @@ describe('--contrast-limit auto-raise for bare --check "contrast:aa"/"contrast:a
     expect(expanded.check).toBe('contrast:aa, no generator, self-hosted-fonts, contrast:aa');
   });
 });
+
+describe('--budget analyzer implication', () => {
+  it('totalJS key implies --bundles', () => {
+    const expanded = applyDesignAudit({ budget: 'totalJS:200KB,FCP:1800' });
+    expect(expanded.bundles).toBe(true);
+    expect(expanded.images).toBeUndefined();
+  });
+
+  it('totalImages / imageCount keys imply --images', () => {
+    expect(applyDesignAudit({ budget: 'totalImages:500KB' }).images).toBe(true);
+    expect(applyDesignAudit({ budget: 'imageCount:20' }).images).toBe(true);
+  });
+
+  it('perf-only budgets imply nothing', () => {
+    const expanded = applyDesignAudit({ budget: 'FCP:1800,LCP:2500,CLS:0.1' });
+    expect(expanded.bundles).toBeUndefined();
+    expect(expanded.images).toBeUndefined();
+  });
+
+  it('an unreadable budget file is swallowed here (reported at capture time)', () => {
+    expect(() => applyDesignAudit({ budget: '/Users/u/nope/missing.json' })).not.toThrow();
+  });
+});

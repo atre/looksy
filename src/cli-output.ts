@@ -75,7 +75,13 @@ export function formatPageLine(result: ScreenshotResult): string | undefined {
   const over = viewportWidth ? formatOverflowFlag(width, viewportWidth) : '';
   const scheme = result.scheme ? ` · scheme: ${result.scheme}` : '';
   const scroll = result.scrollY ? ` · scrollY: ${result.scrollY}px` : '';
-  return `Page: ${width}x${height}px${scheme}${scroll}${over}${title ? ` "${title}"` : ''}${timing}`;
+  const emu = result.pageInfo.emulation;
+  const device = emu?.device
+    ? ` · device: ${emu.device} @${emu.deviceScaleFactor}x${emu.hasTouch ? ' touch' : ''}`
+    : emu?.hasTouch
+      ? ' · touch'
+      : '';
+  return `Page: ${width}x${height}px${device}${scheme}${scroll}${over}${title ? ` "${title}"` : ''}${timing}`;
 }
 
 export function printResult(result: ScreenshotResult, opts: PrintOptions = {}): void {
@@ -85,6 +91,8 @@ export function printResult(result: ScreenshotResult, opts: PrintOptions = {}): 
   const checksOnly = quiet && !!result.checkResults;
   const pageLine = formatPageLine(result);
   if (pageLine) console.log(pageLine);
+  if (result.pageInfo?.emulation?.isMobile && !result.pageInfo.emulation.viewportMeta)
+    console.log('  ⚠ no <meta name=viewport> — real phones render this at 980px zoomed out');
   if (result.failedRequests?.length)
     console.log(formatFailedRequests(result.failedRequests, result.failedRequestsIgnored ?? 0));
   if (result.pageInfo?.overflowCulprits) {

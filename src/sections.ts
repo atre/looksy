@@ -24,10 +24,7 @@ function slugify(text: string): string {
  * Uses clip-based screenshots (absolute rects) to avoid non-unique selector issues.
  * Prefers slugified heading text for filenames.
  */
-export async function screenshotSections(
-  page: Page,
-  outputBase: string,
-): Promise<SectionResult[]> {
+export async function screenshotSections(page: Page, outputBase: string): Promise<SectionResult[]> {
   const dir = dirname(outputBase);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
@@ -86,7 +83,7 @@ export async function screenshotSections(
   for (let i = 0; i < sectionInfo.length; i++) {
     const info = sectionInfo[i];
     // Prefer slugified heading, fall back to id/class/tag
-    const label = info.heading ? slugify(info.heading) : (info.id || info.className || info.tag);
+    const label = info.heading ? slugify(info.heading) : info.id || info.className || info.tag;
     const path = `${baseName}-${i + 1}-${label}${ext}`;
 
     try {
@@ -99,6 +96,7 @@ export async function screenshotSections(
           width: info.rect.width,
           height: info.rect.height,
         },
+        scale: 'css',
       });
       results.push({
         index: i + 1,

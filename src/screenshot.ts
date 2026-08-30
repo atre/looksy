@@ -28,8 +28,15 @@ import {
 import { formatSuggestions } from './suggest.js';
 import { injectLayoutOverlay } from './layout.js';
 import { saveToHistory } from './history.js';
-import { extractPerf } from './perf.js';
-import { loadBudgetConfig, checkBudget, formatBudget, type BudgetActuals } from './budget.js';
+import { contextEmulationOpts } from './viewports.js';
+import { extractPerf, type PerfMetrics } from './perf.js';
+import {
+  loadBudgetConfig,
+  checkBudget,
+  formatBudget,
+  sampleBudgetActuals,
+  type BudgetActuals,
+} from './budget.js';
 import { runResponsiveCheck, formatResponsiveCheck } from './responsive-check.js';
 import { safeRun, type ScreenshotConfig, type ScreenshotResult } from './screenshot-types.js';
 import { buildAnalysisModules } from './screenshot-analysis.js';
@@ -123,6 +130,7 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
         mode: 'full',
       };
     }
+    Object.assign(contextOpts, contextEmulationOpts(config.emulation));
 
     const context = await browser.newContext(contextOpts);
 
@@ -343,7 +351,13 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
         }
       }
 
-      return { width, height, title, overflowCulprits };
+      return {
+        width,
+        height,
+        title,
+        overflowCulprits,
+        hasViewportMeta: !!document.querySelector('meta[name="viewport"]'),
+      };
     }, config.width);
 
     const result: ScreenshotResult = {
@@ -355,6 +369,15 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
         viewportWidth: config.width,
         overflowCulprits:
           pageInfo.overflowCulprits.length > 0 ? pageInfo.overflowCulprits : undefined,
+        emulation: config.emulation
+          ? {
+              device: config.emulation.device,
+              deviceScaleFactor: config.emulation.deviceScaleFactor,
+              isMobile: config.emulation.isMobile,
+              hasTouch: config.emulation.hasTouch,
+              viewportMeta: pageInfo.hasViewportMeta,
+            }
+          : undefined,
       },
     };
     if (result_consent) result.consentDismissed = result_consent;
@@ -456,6 +479,7 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
         fullPage: config.fullPage,
         type: 'jpeg',
         quality: 60,
+        scale: 'css',
       });
       result.thumbPath = thumbPath;
     }
@@ -683,32 +707,62 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
         const budgetText = await safeRun(
           async () => {
             const budgetConfig = loadBudgetConfig(config.budget!);
-            const actuals: BudgetActuals = {};
-            if (result.jsonData?.perf) {
-              actuals.FCP = result.jsonData.perf.fcp;
-              actuals.LCP = result.jsonData.perf.lcp;
-              actuals.CLS = result.jsonData.perf.cls;
-              actuals.TTFB = result.jsonData.perf.ttfb;
-              actuals.requestCount = result.jsonData.perf.resourceCount;
-              actuals.totalTransfer = result.jsonData.perf.totalTransferSize;
+
+            const buildActuals = (perf?: PerfMetrics): BudgetActuals => {
+              const actuals: BudgetActuals = {};
+              if (perf) {
+                actuals.FCP = perf.fcp;
+                actuals.LCP = perf.lcp;
+                actuals.CLS = perf.cls;
+                actuals.TTFB = perf.ttfb;
+                actuals.requestCount = perf.resourceCount;
+                actuals.totalTransfer = perf.totalTransferSize;
+              }
+              if (result.jsonData?.bundles) {
+                actuals.totalJS = result.jsonData.bundles.totalTransferSize;
+              }
+              if (result.jsonData?.imageAudit) {
+                actuals.totalImages = result.jsonData.imageAudit.totalTransferSize;
+                actuals.imageCount = result.jsonData.imageAudit.totalCount;
+              }
+              return actuals;
+            };
+
+            let firstPerf: PerfMetrics | undefined = result.jsonData?.perf;
+            if (!firstPerf?.fcp) firstPerf = await extractPerf(page);
+
+            let actuals: BudgetActuals;
+            let stats: ReturnType<typeof sampleBudgetActuals>['stats'] | undefined;
+            if (config.budgetSamples && config.budgetSamples > 1) {
+              // Extra sampling navigations run on a brand-new page in the same context
+              // (cookies/localStorage/consent-dismissal prepared for this run still apply) —
+              // never on the primary `page`, so sampling can't disturb the main
+              // screenshot/analysis regardless of where this block sits relative to capture.
+              const allActuals = [buildActuals(firstPerf)];
+              const samplePage = await context.newPage();
+              try {
+                for (let i = 1; i < config.budgetSamples; i++) {
+                  await navigateSafe(samplePage, config.url, { timeout: config.timeout });
+                  allActuals.push(buildActuals(await extractPerf(samplePage)));
+                }
+              } finally {
+                await samplePage.close();
+              }
+              ({ actuals, stats } = sampleBudgetActuals(allActuals));
+            } else {
+              actuals = buildActuals(firstPerf);
             }
-            if (result.jsonData?.bundles) {
-              actuals.totalJS = result.jsonData.bundles.totalTransferSize;
+            if (budgetConfig.totalCSS !== undefined) {
+              // No analyzer module computes CSS weight — sum external .css resources on the
+              // primary page (inline <style> / CSS-in-JS contribute nothing here).
+              actuals.totalCSS = await page.evaluate(() =>
+                (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
+                  .filter((e) => /\.css(\?|$)/.test(e.name))
+                  .reduce((sum, e) => sum + (e.transferSize || 0), 0),
+              );
             }
-            if (result.jsonData?.imageAudit) {
-              actuals.totalImages = result.jsonData.imageAudit.totalTransferSize;
-              actuals.imageCount = result.jsonData.imageAudit.totalCount;
-            }
-            if (!actuals.FCP) {
-              const perf = await extractPerf(page);
-              actuals.FCP = perf.fcp;
-              actuals.LCP = perf.lcp;
-              actuals.CLS = perf.cls;
-              actuals.TTFB = perf.ttfb;
-              actuals.requestCount = perf.resourceCount;
-              actuals.totalTransfer = perf.totalTransferSize;
-            }
-            const budgetData = checkBudget(budgetConfig, actuals);
+            const budgetData = checkBudget(budgetConfig, actuals, stats);
+
             result.budgetResults = budgetData;
             if (result.jsonData) result.jsonData.budget = budgetData;
             return formatBudget(budgetData, { compact });

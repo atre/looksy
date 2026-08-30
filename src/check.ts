@@ -61,6 +61,15 @@ export const CHECK_ASSERTIONS: Array<{ syntax: string; description: string }> = 
     description:
       'no control smaller than N px (default 24 = WCAG 2.2 AA; 44 = AAA; inline text links exempt)',
   },
+  {
+    syntax: 'input-zoom',
+    description:
+      'no visible text-like form control below 16px font-size (iOS Safari zooms on focus); run with --mobile',
+  },
+  {
+    syntax: 'hover-nav',
+    description: 'no nav submenu revealed only by :hover (unreachable on touch); run with --mobile',
+  },
   { syntax: 'h1-count[:N]', description: 'exactly N <h1> (default 1)' },
   { syntax: 'heading-outline', description: 'no skipped heading levels (hidden headings ignored)' },
   {
@@ -99,6 +108,8 @@ export const CHECK_ASSERTIONS: Array<{ syntax: string; description: string }> = 
 const BARE_ASSERTIONS = new Set([
   'no-hscroll',
   'touch-targets',
+  'input-zoom',
+  'hover-nav',
   'h1-count',
   'heading-outline',
   'no-broken-images',
@@ -782,6 +793,174 @@ export async function runChecksStructured(
                     detail: `page ${sw}px vs viewport ${vw}px (+${sw - vw}px horizontal scroll)`,
                   };
                 return { assertion, pass: true, detail: `page ${sw}px fits ${vw}px viewport` };
+              }
+
+              // "input-zoom" — iOS Safari zooms the page when a control with font-size < 16px is focused
+              if (lower === 'input-zoom') {
+                const SKIP = new Set([
+                  'hidden',
+                  'checkbox',
+                  'radio',
+                  'range',
+                  'file',
+                  'submit',
+                  'button',
+                  'reset',
+                  'image',
+                  'color',
+                ]);
+                const offenders: string[] = [];
+                let checked = 0;
+                for (const el of Array.from(document.querySelectorAll('input, select, textarea'))) {
+                  const type =
+                    el.tagName === 'INPUT' ? (el.getAttribute('type') || '').toLowerCase() : '';
+                  if (SKIP.has(type)) continue;
+                  const cs = getComputedStyle(el);
+                  if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+                  const rect = el.getBoundingClientRect();
+                  if (rect.width <= 1 || rect.height <= 1) continue;
+                  checked++;
+                  const fs = parseFloat(cs.fontSize);
+                  if (!(fs < 16)) continue;
+                  const id = el.getAttribute('id');
+                  const label = (
+                    el.getAttribute('placeholder') ||
+                    el.getAttribute('aria-label') ||
+                    (id
+                      ? document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent
+                      : '') ||
+                    el.getAttribute('name') ||
+                    ''
+                  )
+                    .trim()
+                    .slice(0, 20);
+                  offenders.push(
+                    `${el.tagName.toLowerCase()}${type ? `[${type}]` : ''} ${Math.round(fs * 10) / 10}px "${label}"`,
+                  );
+                }
+                if (checked === 0) return { assertion, pass: true, detail: 'no form controls' };
+                if (offenders.length === 0)
+                  return { assertion, pass: true, detail: `all ${checked} form controls ≥ 16px` };
+                const meta =
+                  document.querySelector('meta[name="viewport"]')?.getAttribute('content') || '';
+                const masked =
+                  /maximum-scale\s*=\s*1(?:\.0+)?(?![\d.])|user-scalable\s*=\s*(?:no|0)/i.test(
+                    meta,
+                  );
+                return {
+                  assertion,
+                  pass: false,
+                  detail: `${offenders.length}/${checked} controls < 16px: ${offenders.slice(0, 5).join('; ')}${offenders.length > 5 ? ` … and ${offenders.length - 5} more` : ''}${masked ? ' — meta viewport maximum-scale=1 masks the zoom but blocks pinch-zoom on Android (WCAG 1.4.4)' : ''}`,
+                };
+              }
+
+              // "hover-nav" — CSSOM scan: :hover rules that reveal a hidden nav submenu with no focus/click twin
+              if (lower === 'hover-nav') {
+                const STRIP =
+                  /:hover|:focus-within|:focus|\[aria-expanded="true"\]|\.(?:open|is-open|active|is-active|show|expanded)(?![\w-])|\[open\]/g;
+                const SAFE =
+                  /:focus-within|:focus|\[aria-expanded="true"\]|\.(?:open|is-open|active|is-active|show|expanded)(?![\w-])|\[open\]/;
+                const norm = (s: string) => s.replace(STRIP, '').replace(/\s+/g, ' ').trim();
+                const reveals = (st: CSSStyleDeclaration) =>
+                  (st.display !== '' && st.display !== 'none') ||
+                  st.visibility === 'visible' ||
+                  (st.opacity !== '' && parseFloat(st.opacity) > 0) ||
+                  (st.maxHeight !== '' && st.maxHeight !== '0' && st.maxHeight !== '0px');
+                const hoverRules: Array<{ selector: string; base: string }> = [];
+                const safeBases = new Set<string>();
+                const walk = (rules: CSSRuleList, hoverCapable: boolean): void => {
+                  for (const rule of Array.from(rules)) {
+                    if (rule instanceof CSSMediaRule) {
+                      walk(
+                        rule.cssRules,
+                        hoverCapable || /hover\s*:\s*hover/.test(rule.conditionText),
+                      );
+                      continue;
+                    }
+                    if (rule instanceof CSSSupportsRule) {
+                      walk(rule.cssRules, hoverCapable);
+                      continue;
+                    }
+                    if (!(rule instanceof CSSStyleRule)) continue;
+                    for (const raw of rule.selectorText.split(',')) {
+                      const s = raw.trim();
+                      if (/:hover/.test(s)) {
+                        if (!hoverCapable && reveals(rule.style))
+                          hoverRules.push({ selector: s, base: norm(s) });
+                      } else if (SAFE.test(s)) safeBases.add(norm(s));
+                    }
+                  }
+                };
+                let sheets = 0;
+                let blocked = 0;
+                for (const sheet of Array.from(document.styleSheets)) {
+                  sheets++;
+                  try {
+                    walk(sheet.cssRules, false);
+                  } catch {
+                    blocked++;
+                  }
+                }
+                if (sheets > 0 && blocked === sheets)
+                  return {
+                    assertion,
+                    pass: true,
+                    detail: `not probed (all ${sheets} stylesheets cross-origin)`,
+                  };
+                const hidden = (el: Element) => {
+                  const cs = getComputedStyle(el);
+                  return (
+                    cs.display === 'none' ||
+                    cs.visibility === 'hidden' ||
+                    parseFloat(cs.opacity) === 0 ||
+                    (cs.overflow === 'hidden' && parseFloat(cs.maxHeight) === 0)
+                  );
+                };
+                const offenders: string[] = [];
+                const seen = new Set<Element>();
+                for (const r of hoverRules) {
+                  if (safeBases.has(r.base)) continue;
+                  let els: Element[] = [];
+                  try {
+                    els = Array.from(document.querySelectorAll(r.base));
+                  } catch {
+                    continue;
+                  }
+                  for (const el of els) {
+                    if (seen.has(el)) continue;
+                    if (!el.closest('nav, header, [role="navigation"]')) continue;
+                    const cls = el.getAttribute('class') || '';
+                    const isMenu =
+                      el.tagName === 'UL' ||
+                      el.getAttribute('role') === 'menu' ||
+                      /menu|dropdown|submenu|flyout/i.test(cls);
+                    if (!isMenu || !hidden(el)) continue;
+                    const parent = el.parentElement;
+                    if (!parent) continue;
+                    if (
+                      parent.querySelector(
+                        ':scope > button, :scope > [aria-expanded], :scope > [aria-haspopup], :scope > summary',
+                      )
+                    )
+                      continue;
+                    seen.add(el);
+                    const label = (parent.querySelector('a, button')?.textContent || '')
+                      .trim()
+                      .slice(0, 20);
+                    offenders.push(`${r.selector} ("${label}")`);
+                  }
+                }
+                if (offenders.length === 0)
+                  return {
+                    assertion,
+                    pass: true,
+                    detail: `0 hover-only submenus (${hoverRules.length} hover rules checked)`,
+                  };
+                return {
+                  assertion,
+                  pass: false,
+                  detail: `${offenders.length} hover-only submenus in nav: ${offenders.slice(0, 5).join('; ')}${offenders.length > 5 ? ` … and ${offenders.length - 5} more` : ''}`,
+                };
               }
 
               // "touch-targets[:N]" — no control smaller than N px (inline text links exempt, WCAG 2.5.8)

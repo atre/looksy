@@ -1,14 +1,18 @@
 # snuff manifest — definition-of-done gates. Run `snuff` to execute all; `snuff --tag fast` for the ~5 s unit loop.
 gates:
-  - name: unit
-    run: npx tsc && npx vitest run tests/unit
-    tags: [fast]
-    paths: [src/**, tests/unit/**, bin/**, package.json, tsconfig.json]
-  - name: test
-    run: npm test
-    tags: [full]
-    paths: [src/**, tests/**, bin/**, package.json, tsconfig.json]
+  # build is the only dist/ writer and runs first (needs:) — tests spawn
+  # bin/looksy.js which imports dist/, so a concurrent tsc rewrite torn-reads.
   - name: build
     run: npm run build
     tags: [full]
     paths: [src/**, package.json, tsconfig.json]
+  - name: unit
+    run: npx vitest run tests/unit
+    tags: [fast]
+    needs: [build]
+    paths: [src/**, tests/unit/**, bin/**, package.json, tsconfig.json]
+  - name: test
+    run: npm test
+    tags: [full]
+    needs: [build]
+    paths: [src/**, tests/**, bin/**, package.json, tsconfig.json]

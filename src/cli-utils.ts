@@ -1,7 +1,7 @@
 import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { viewports } from './viewports.js';
+import { viewports, descriptorViewport, type Viewport } from './viewports.js';
 import { loadFleetConfig, expandFleetTargets } from './fleet-config.js';
 
 /** Newest mtime (ms) among the paths that exist, or undefined when none does. */
@@ -271,13 +271,28 @@ export function parseViewport(raw: string): { width: number; height: number } {
   return { width, height };
 }
 
-export function resolveViewport(values: Record<string, any>): {
-  width: number;
-  height: number;
-} {
+export function resolveViewport(values: Record<string, any>): Viewport {
+  if (values.device) {
+    if (
+      values.mobile ||
+      values.tablet ||
+      values.width ||
+      values.height ||
+      values.viewport ||
+      values.multi ||
+      values.sweep
+    ) {
+      throw new Error(
+        '--device cannot be combined with --mobile/--tablet/--width/--height/--viewport/--multi/--sweep',
+      );
+    }
+    return descriptorViewport(String(values.device));
+  }
   if (values.viewport) {
-    if (values.width || values.height || values.mobile || values.tablet) {
-      throw new Error('--viewport cannot be combined with --width/--height/--mobile/--tablet');
+    if (values.width || values.height || values.mobile || values.tablet || values.device) {
+      throw new Error(
+        '--viewport cannot be combined with --width/--height/--mobile/--tablet/--device',
+      );
     }
     return parseViewport(String(values.viewport));
   }

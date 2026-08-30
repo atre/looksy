@@ -126,6 +126,7 @@ export async function runResponsiveCheck(
       BREAKPOINTS.map(async (bp) => {
         const context = await resolvedBrowser.newContext({
           viewport: { width: bp.width, height: bp.height },
+          ...(bp.width <= 768 ? { hasTouch: true } : {}),
         });
         await prepareContext(context, url, prep);
         const page = await context.newPage();

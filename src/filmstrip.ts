@@ -40,7 +40,7 @@ export async function captureFilmstrip(
       await page.waitForTimeout(50);
     }
 
-    const buf = await page.screenshot({ type: 'png' });
+    const buf = await page.screenshot({ type: 'png', scale: 'css' });
     frameBuffers.push(buf);
 
     if (i === 0 && interact) {

@@ -34,13 +34,15 @@ Usage:
 
 Capture options:
   -o, --output <path>    Output path (default: ${DEFAULT_OUTPUT}); dir/ or existing dir = one file per URL (fleet/--urls/--pages)
-  --mobile               Mobile viewport (390x844)
-  --tablet               Tablet viewport (768x1024)
+  --mobile               Mobile viewport 390x844 + iPhone 14 emulation (UA, DPR 3, touch)
+  --tablet               Tablet viewport 768x1024 + iPad emulation (DPR 2, touch)
   --full                 Full page scroll capture
   --max-height <n>       Cap full-page capture height (use with --full)
   --width <n>            Custom viewport width
   --height <n>           Custom viewport height
-  --viewport <WxH>       Width x height in one flag (e.g. 390x844); not with --width/--height/--mobile/--tablet
+  --viewport <WxH>       Width x height in one flag (e.g. 390x844); not with --width/--height/--mobile/--tablet/--device
+  --device <name>        Playwright device descriptor ("iPhone 14", "Pixel 7", "iPad (gen 7)"); own viewport + emulation
+  --list-devices         Print every device name --device accepts
   --selector <css>       Screenshot specific element
   --all                  With --selector: screenshot every matching element
   --multi                Desktop + mobile screenshots
@@ -99,6 +101,8 @@ Metadata & analysis:
   --image-optimizer      Probe ?w=/known-host optimizer images at w=64/w=1080,
                          flag PASS-THROUGH when both sizes come back equal
   --budget <json|inline> Performance budget gate (exit code 1 on failure)
+  --budget-samples <n>   Capture n times, gate on median FCP/LCP/CLS/TTFB
+                         (min/median/max reported); needs --budget, n ≥ 2
   --speed                Compound: all performance analysis in one flag
   --design-spec <json>   Validate page against a design specification
   --diff-report <name>   Semantic diff against a saved baseline
@@ -114,7 +118,7 @@ Token-saving:
                            class:<name> · selector:<css> · count:N <css> · has <css>
                            no <pattern> · visible <css> · hidden <css>
                            font:<css>=<family> · bg:<css>=<hex> · color:<css>=<hex>
-                           contrast:aa · contrast:aaa · no-hscroll · touch-targets[:N]
+                           contrast:aa · contrast:aaa · no-hscroll · touch-targets[:N] · input-zoom · hover-nav
                            h1-count[:N] · heading-outline · no-broken-images · status:<code>
                            assets-ok · alt-text
                            lang · canonical · meta-description · og-image · og-title
@@ -192,7 +196,7 @@ Advanced:
   --html                 Read HTML from stdin instead of URL
   --fragment             Suppress doc-level issues (missing lang, canonical) for
                          component/fragment previews (piped HTML with no <head>)
-  --interact <actions>   Actions before capture (click:.btn,wait:500,scroll:1000)
+  --interact <actions>   Actions before capture (click:.btn,wait:500,scroll:1000,tap:.sel,swipe:left[=px])
   --inject <css>         Inject custom CSS before capture
   --no-stabilize         Skip capture stabilization (fonts.ready wait + animation pause)
   --timeout <ms>         Navigation timeout (default: 30000)
