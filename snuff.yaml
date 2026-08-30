@@ -16,3 +16,7 @@ gates:
     tags: [full]
     needs: [build]
     paths: [src/**, tests/**, bin/**, package.json, tsconfig.json]
+  - name: secrets
+    run: gitleaks git . --no-banner --redact
+    paths: ['**']
+    requires: [gitleaks]
