@@ -351,12 +351,69 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
         }
       }
 
+      // Real body background luminance (Decisions: bg: readout), independent of the
+      // emulated `scheme`. Same norm+parent-walk pattern as contrast.ts; WCAG luminance
+      // formula inlined (page.evaluate ships the function's own source, no cross-module refs).
+      const $bg = {
+        ctx: document
+          .createElement('canvas')
+          .getContext('2d', { willReadFrequently: true, colorSpace: 'srgb' })!,
+        norm(c: string): string | null {
+          $bg.ctx.fillStyle = '#010203';
+          $bg.ctx.fillStyle = c;
+          const s = $bg.ctx.fillStyle;
+          if (s === '#010203' && c.replace(/\s/g, '').toLowerCase() !== '#010203') return null;
+          if (/^(#|rgba?\()/.test(s)) return s;
+          $bg.ctx.clearRect(0, 0, 1, 1);
+          $bg.ctx.fillRect(0, 0, 1, 1);
+          const [r, g, b, a] = $bg.ctx.getImageData(0, 0, 1, 1).data;
+          return a === 255
+            ? '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')
+            : `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+        },
+        isTransparent(raw: string): boolean {
+          if (raw === 'transparent' || raw === 'rgba(0, 0, 0, 0)') return true;
+          const n = $bg.norm(raw);
+          return !!n && /,\s*0\)$/.test(n);
+        },
+        parseRgb(n: string): [number, number, number] | null {
+          const hex = n.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i);
+          if (hex) return [parseInt(hex[1], 16), parseInt(hex[2], 16), parseInt(hex[3], 16)];
+          const m = n.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
+          return m ? [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])] : null;
+        },
+      };
+      let bgResolved = 'rgb(255, 255, 255)';
+      {
+        let current: Element | null = document.body || docEl;
+        while (current) {
+          const c = getComputedStyle(current).backgroundColor;
+          if (c && !$bg.isTransparent(c)) {
+            bgResolved = c;
+            break;
+          }
+          current = current.parentElement;
+        }
+      }
+      const bgNorm = $bg.norm(bgResolved);
+      const bgRgb = (bgNorm && $bg.parseRgb(bgNorm)) || [255, 255, 255];
+      const bgToLinear = (c: number) => {
+        const s = c / 255;
+        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+      };
+      const bgLum =
+        0.2126 * bgToLinear(bgRgb[0]) +
+        0.7152 * bgToLinear(bgRgb[1]) +
+        0.0722 * bgToLinear(bgRgb[2]);
+      const bg: 'dark' | 'light' = bgLum < 0.5 ? 'dark' : 'light';
+
       return {
         width,
         height,
         title,
         overflowCulprits,
         hasViewportMeta: !!document.querySelector('meta[name="viewport"]'),
+        bg,
       };
     }, config.width);
 
@@ -364,6 +421,7 @@ export async function screenshot(config: ScreenshotConfig): Promise<ScreenshotRe
       imagePath: outputPath,
       url: config.url,
       scheme: config.darkMode ? 'dark' : 'light',
+      bg: pageInfo.bg,
       pageInfo: {
         ...pageInfo,
         viewportWidth: config.width,

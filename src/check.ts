@@ -383,10 +383,39 @@ export async function runChecksStructured(
             // Object method pattern to avoid named functions inside evaluate
             // (esbuild keepNames wraps standalone named bindings with __name() which breaks in browser context)
             const $ = {
+              ctx: document
+                .createElement('canvas')
+                .getContext('2d', { willReadFrequently: true, colorSpace: 'srgb' })!,
+              norm(c: string): string | null {
+                $.ctx.fillStyle = '#010203';
+                $.ctx.fillStyle = c;
+                const s = $.ctx.fillStyle;
+                if (s === '#010203' && c.replace(/\s/g, '').toLowerCase() !== '#010203')
+                  return null;
+                if (/^(#|rgba?\()/.test(s)) return s;
+                $.ctx.clearRect(0, 0, 1, 1);
+                $.ctx.fillRect(0, 0, 1, 1);
+                const [r, g, b, a] = $.ctx.getImageData(0, 0, 1, 1).data;
+                return a === 255
+                  ? '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')
+                  : `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+              },
+              isTransparent(raw: string): boolean {
+                if (raw === 'transparent' || raw === 'rgba(0, 0, 0, 0)') return true;
+                const n = $.norm(raw);
+                return !!n && /,\s*0\)$/.test(n);
+              },
+              parseNorm(n: string): [number, number, number] | null {
+                const hex = n.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i);
+                if (hex) return [parseInt(hex[1], 16), parseInt(hex[2], 16), parseInt(hex[3], 16)];
+                const m = n.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
+                return m ? [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])] : null;
+              },
               getLuminance(color: string): number {
-                const match = color.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
-                if (!match) return 1;
-                const [r, g, b] = [parseInt(match[1]), parseInt(match[2]), parseInt(match[3])];
+                const n = $.norm(color);
+                const rgb = n ? $.parseNorm(n) : null;
+                if (!rgb) return 1;
+                const [r, g, b] = rgb;
                 const toLinear = (c: number) => {
                   const s = c / 255;
                   return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
@@ -397,7 +426,7 @@ export async function runChecksStructured(
                 let current: Element | null = el;
                 while (current) {
                   const bg = getComputedStyle(current).backgroundColor;
-                  if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+                  if (bg && !$.isTransparent(bg)) return bg;
                   current = current.parentElement;
                 }
                 return 'rgb(255, 255, 255)';
@@ -426,9 +455,10 @@ export async function runChecksStructured(
                 expected: string,
                 tolerance = 5,
               ): { match: boolean; actual: string } {
-                const m = computed.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
-                if (!m) return { match: false, actual: computed };
-                const [r, g, b] = [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])];
+                const n = $.norm(computed);
+                const rgb = n ? $.parseNorm(n) : null;
+                if (!rgb) return { match: false, actual: computed };
+                const [r, g, b] = rgb;
                 const hex = $.rgbToHex(r, g, b);
                 const exp = $.hexToRgb(expected);
                 if (!exp) return { match: false, actual: hex };
@@ -466,7 +496,10 @@ export async function runChecksStructured(
                   const bg = $.resolveBg(el);
                   const lum = $.getLuminance(bg);
                   const pass = darkWanted ? lum < 0.5 : lum >= 0.5;
-                  return { assertion, pass, detail: `bg=${bg} luminance=${lum.toFixed(2)}` };
+                  const detail = $.norm(bg)
+                    ? `bg=${bg} luminance=${lum.toFixed(2)}`
+                    : `bg=${bg} luminance=n/a (unparsed)`;
+                  return { assertion, pass, detail };
                 } catch {
                   return { assertion, pass: false, detail: 'invalid selector' };
                 }
@@ -670,6 +703,28 @@ export async function runChecksStructured(
                 const level = lower === 'contrast:aaa' ? 'aaa' : 'aa';
                 // Local object to avoid named const arrows (esbuild keepNames issue)
                 const cc = {
+                  ctx: document
+                    .createElement('canvas')
+                    .getContext('2d', { willReadFrequently: true, colorSpace: 'srgb' })!,
+                  norm(c: string): string | null {
+                    cc.ctx.fillStyle = '#010203';
+                    cc.ctx.fillStyle = c;
+                    const s = cc.ctx.fillStyle;
+                    if (s === '#010203' && c.replace(/\s/g, '').toLowerCase() !== '#010203')
+                      return null;
+                    if (/^(#|rgba?\()/.test(s)) return s;
+                    cc.ctx.clearRect(0, 0, 1, 1);
+                    cc.ctx.fillRect(0, 0, 1, 1);
+                    const [r, g, b, a] = cc.ctx.getImageData(0, 0, 1, 1).data;
+                    return a === 255
+                      ? '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')
+                      : `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+                  },
+                  isTransparent(raw: string): boolean {
+                    if (raw === 'transparent' || raw === 'rgba(0, 0, 0, 0)') return true;
+                    const n = cc.norm(raw);
+                    return !!n && /,\s*0\)$/.test(n);
+                  },
                   toLinear(c: number) {
                     const s = c / 255;
                     return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
@@ -680,7 +735,12 @@ export async function runChecksStructured(
                     );
                   },
                   parse(color: string): [number, number, number] | null {
-                    const m = color.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
+                    const n = cc.norm(color);
+                    if (!n) return null;
+                    const hex = n.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i);
+                    if (hex)
+                      return [parseInt(hex[1], 16), parseInt(hex[2], 16), parseInt(hex[3], 16)];
+                    const m = n.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
                     return m ? [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])] : null;
                   },
                 };
@@ -715,7 +775,7 @@ export async function runChecksStructured(
                   let cur: Element | null = el;
                   while (cur) {
                     const bgColor = getComputedStyle(cur).backgroundColor;
-                    if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
+                    if (bgColor && !cc.isTransparent(bgColor)) {
                       const parsed = cc.parse(bgColor);
                       if (parsed) {
                         bg = parsed;

@@ -46,10 +46,14 @@ export function parseColor(color: string): [number, number, number] | null {
       parseInt(hex[3] + hex[3], 16),
     ];
   }
-  // rgb(r, g, b)
-  const match = hex.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
+  // rgb(r, g, b) — comma- or space-separated
+  const match = hex.match(/rgba?\(\s*(\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)/);
   if (match) {
-    return [parseInt(match[1]), parseInt(match[2]), parseInt(match[3])];
+    return [
+      Math.round(parseFloat(match[1])),
+      Math.round(parseFloat(match[2])),
+      Math.round(parseFloat(match[3])),
+    ];
   }
   // hsl(h, s%, l%) or hsla(h, s%, l%, a)
   const hslMatch = hex.match(/hsla?\(\s*([\d.]+),?\s*([\d.]+)%,?\s*([\d.]+)%/);

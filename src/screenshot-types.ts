@@ -139,6 +139,8 @@ export interface ScreenshotResult {
   url?: string;
   /** Color scheme actually emulated for this capture (light unless --dark/--both dark leg). */
   scheme?: 'light' | 'dark';
+  /** Real body background luminance (dark when < 0.5), independent of the emulated `scheme`. */
+  bg?: 'light' | 'dark';
   /** True once a PNG/JPEG was actually written to imagePath (false in --report/--check/--audit text-only mode, unless forceScreenshot). */
   imageSaved?: boolean;
   metaPath?: string;
@@ -194,7 +196,7 @@ export interface ScreenshotResult {
   /** Total elapsed time in ms */
   elapsedMs?: number;
   /** Contrast failure counts (for --fail-on-aa/--fail-on-aaa) */
-  contrastFailures?: { aa: number; aaa: number; invisible?: number };
+  contrastFailures?: { aa: number; aaa: number; invisible?: number; unparsed?: number };
   /** Contrast pair details (for stdout output with --fail-on-aa) */
   contrastPairs?: ContrastPairResult[];
   /** Design spec validation text */

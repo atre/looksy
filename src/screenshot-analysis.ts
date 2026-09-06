@@ -80,6 +80,7 @@ export function buildAnalysisModules(
           aa: cr.aaFailures,
           aaa: cr.aaaFailures,
           invisible: cr.invisibleFailures,
+          unparsed: cr.unparsed,
         };
         result.contrastPairs = cr.pairs;
         if (result.jsonData)
@@ -91,6 +92,7 @@ export function buildAnalysisModules(
             sampled: cr.sampled,
             total: cr.total,
             capped: cr.capped,
+            unparsed: cr.unparsed,
           };
         return { section: cr.text, summary: summarize('contrast', cr) };
       },

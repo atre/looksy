@@ -21,7 +21,9 @@ function runWithStdin(input: string, args: string[], env?: NodeJS.ProcessEnv) {
 
 // Same reason as host-resolver.test.ts: spawnSync would block the event loop that the
 // in-process http server needs to answer the child.
-function runAsync(args: string[]): Promise<{ status: number | null; stdout: string; stderr: string }> {
+function runAsync(
+  args: string[],
+): Promise<{ status: number | null; stdout: string; stderr: string }> {
   return new Promise((resolvePromise) => {
     const child = spawn('node', [BIN, ...args]);
     let stdout = '';
@@ -92,7 +94,13 @@ describe('--save-storage-state round trip', () => {
 
   it('writes the context storage state, and --storage-state replays it', async () => {
     const state = join(dir, 'ss.json');
-    const a = await runAsync([`${origin}/set`, '--save-storage-state', state, '-o', join(dir, 'a.png')]);
+    const a = await runAsync([
+      `${origin}/set`,
+      '--save-storage-state',
+      state,
+      '-o',
+      join(dir, 'a.png'),
+    ]);
     expect(a.status).toBe(0);
     expect(a.stdout).toContain(`storage state: ${state}`);
     expect(existsSync(state)).toBe(true);
@@ -120,9 +128,16 @@ describe('scrollY readout', () => {
 
   it('--fold after --interact scroll:2000 captures the offset and says so on the Page line', () => {
     const out = join(dir, 'scrolled.png');
-    const r = runWithStdin(H, ['--html', '--fold', '--interact', 'scroll:2000,wait:200', '-o', out]);
+    const r = runWithStdin(H, [
+      '--html',
+      '--fold',
+      '--interact',
+      'scroll:2000,wait:200',
+      '-o',
+      out,
+    ]);
     expect(r.status).toBe(0);
-    expect(r.stdout).toMatch(/^Page: 1280x3000px · scheme: light · scrollY: 2000px/m);
+    expect(r.stdout).toMatch(/^Page: 1280x3000px · scheme: light · bg: light · scrollY: 2000px/m);
     expect(centerPixel(out)).toEqual([0, 0, 0]);
   }, 30_000);
 
@@ -147,7 +162,11 @@ describe('default-path overwrite note', () => {
     expect(second.stdout).toMatch(
       /^note: replaced previous default capture \(written \d{2}:\d{2}:\d{2}, \d+s ago\)$/m,
     );
-    const explicit = runWithStdin('<h1>three</h1>', ['--html', '-o', join(dir, 'explicit.png')], env);
+    const explicit = runWithStdin(
+      '<h1>three</h1>',
+      ['--html', '-o', join(dir, 'explicit.png')],
+      env,
+    );
     expect(explicit.stdout).not.toContain('note: replaced');
   }, 60_000);
 });

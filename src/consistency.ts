@@ -20,15 +20,45 @@ export async function extractPageSnapshot(page: Page): Promise<PageSnapshot> {
     // Headings
     const headings: { level: number; text: string }[] = [];
     for (const el of document.querySelectorAll('h1,h2,h3,h4,h5,h6')) {
-      headings.push({ level: parseInt(el.tagName[1]), text: (el.textContent || '').trim().slice(0, 60) });
+      headings.push({
+        level: parseInt(el.tagName[1]),
+        text: (el.textContent || '').trim().slice(0, 60),
+      });
     }
 
     // Color palette (bg + fg)
+    // Object method pattern to avoid named functions inside evaluate
+    // (esbuild keepNames wraps standalone named bindings with __name() which breaks in browser context)
+    const $ = {
+      ctx: document
+        .createElement('canvas')
+        .getContext('2d', { willReadFrequently: true, colorSpace: 'srgb' })!,
+      norm(c: string): string | null {
+        $.ctx.fillStyle = '#010203';
+        $.ctx.fillStyle = c;
+        const s = $.ctx.fillStyle;
+        if (s === '#010203' && c.replace(/\s/g, '').toLowerCase() !== '#010203') return null;
+        if (/^(#|rgba?\()/.test(s)) return s;
+        $.ctx.clearRect(0, 0, 1, 1);
+        $.ctx.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = $.ctx.getImageData(0, 0, 1, 1).data;
+        return a === 255
+          ? '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')
+          : `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+      },
+      isTransparent(raw: string): boolean {
+        if (raw === 'transparent' || raw === 'rgba(0, 0, 0, 0)') return true;
+        const n = $.norm(raw);
+        return !!n && /,\s*0\)$/.test(n);
+      },
+    };
     const colorSet = new Set<string>();
-    for (const el of document.querySelectorAll('body,header,footer,main,section,nav,h1,h2,h3,p,a,button')) {
+    for (const el of document.querySelectorAll(
+      'body,header,footer,main,section,nav,h1,h2,h3,p,a,button',
+    )) {
       const cs = getComputedStyle(el);
       const bg = cs.backgroundColor;
-      if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') colorSet.add(bg);
+      if (bg && !$.isTransparent(bg)) colorSet.add(bg);
       const fg = cs.color;
       if (fg) colorSet.add(fg);
     }
@@ -68,7 +98,10 @@ export async function extractPageSnapshot(page: Page): Promise<PageSnapshot> {
 /**
  * Compare multiple page snapshots and flag divergences.
  */
-export function compareSnapshots(snapshots: PageSnapshot[], opts: { compact?: boolean } = {}): string {
+export function compareSnapshots(
+  snapshots: PageSnapshot[],
+  opts: { compact?: boolean } = {},
+): string {
   const compact = opts.compact ?? false;
   const lines: string[] = [];
   lines.push(compact ? '## Consistency' : '## Cross-Page Consistency\n');
@@ -114,9 +147,13 @@ export function compareSnapshots(snapshots: PageSnapshot[], opts: { compact?: bo
       lines.push(`- Color palette: ${uniqueColors.length} page(s) have unique colors`);
     } else {
       lines.push('### Color Palette Divergence\n');
-      lines.push(`Shared: ${sharedColors.length} colors | Divergent: ${uniqueColors.length} page(s)`);
+      lines.push(
+        `Shared: ${sharedColors.length} colors | Divergent: ${uniqueColors.length} page(s)`,
+      );
       for (const u of uniqueColors) {
-        lines.push(`- **${u.url}**: ${u.colors.slice(0, 5).join(', ')}${u.colors.length > 5 ? ` +${u.colors.length - 5} more` : ''}`);
+        lines.push(
+          `- **${u.url}**: ${u.colors.slice(0, 5).join(', ')}${u.colors.length > 5 ? ` +${u.colors.length - 5} more` : ''}`,
+        );
       }
       lines.push('');
     }
@@ -180,9 +217,17 @@ export function compareSnapshots(snapshots: PageSnapshot[], opts: { compact?: bo
   }
 
   if (divergences === 0) {
-    lines.push(compact ? 'All pages consistent.' : 'All pages share the same heading structure, colors, fonts, navigation, and footer.\n');
+    lines.push(
+      compact
+        ? 'All pages consistent.'
+        : 'All pages share the same heading structure, colors, fonts, navigation, and footer.\n',
+    );
   } else {
-    lines.push(compact ? `${divergences} divergence(s) found.` : `**${divergences} divergence(s) found** across ${snapshots.length} pages.\n`);
+    lines.push(
+      compact
+        ? `${divergences} divergence(s) found.`
+        : `**${divergences} divergence(s) found** across ${snapshots.length} pages.\n`,
+    );
   }
   lines.push('');
 

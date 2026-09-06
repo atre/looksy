@@ -26,7 +26,7 @@ contrast: 5 AA fail, 13 AAA fail (19 checked)
 
 ## Features
 
-- **Screenshot any URL** — local files (auto-served), dev servers, deployed sites
+- **Screenshot any URL** — local files (auto-served, bare filenames in cwd too), dev servers, deployed sites
 - **AI-optimized output** — metadata sidecar with exact CSS values, not just pixels
 - **Visual regression** — baseline save/diff with pixel-level change detection
 - **Diff→element attribution** — diffs report *which elements* changed and *which CSS values* (`.hero-cta — padding: 16px → 12px`), not just a pixel percentage
@@ -513,6 +513,8 @@ Screenshots save to `~/.looksy/preview.png` by default (overwritten each time �
 ```
 Page: 1280x4200px "My Site" (1.2s)
 ```
+
+The Page line also carries `· bg: dark|light` — the real `document.body` background's resolved luminance, independent of the emulated `--dark`/`scheme:`.
 
 ### Metadata sidecar (`--meta`)
 

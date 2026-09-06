@@ -80,6 +80,32 @@ export async function extractMetadata(page: Page): Promise<PageMetadata> {
         text: (el.textContent ?? '').trim().slice(0, 100),
       }));
 
+    // Object method pattern to avoid named functions inside evaluate
+    // (esbuild keepNames wraps standalone named bindings with __name() which breaks in browser context)
+    const $color = {
+      ctx: document
+        .createElement('canvas')
+        .getContext('2d', { willReadFrequently: true, colorSpace: 'srgb' })!,
+      norm(c: string): string | null {
+        $color.ctx.fillStyle = '#010203';
+        $color.ctx.fillStyle = c;
+        const s = $color.ctx.fillStyle;
+        if (s === '#010203' && c.replace(/\s/g, '').toLowerCase() !== '#010203') return null;
+        if (/^(#|rgba?\()/.test(s)) return s;
+        $color.ctx.clearRect(0, 0, 1, 1);
+        $color.ctx.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = $color.ctx.getImageData(0, 0, 1, 1).data;
+        return a === 255
+          ? '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')
+          : `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+      },
+      isTransparent(raw: string): boolean {
+        if (raw === 'transparent' || raw === 'rgba(0, 0, 0, 0)') return true;
+        const n = $color.norm(raw);
+        return !!n && /,\s*0\)$/.test(n);
+      },
+    };
+
     // Collect unique colors from visible elements
     const colorSet = new Map<string, { property: string; value: string; element: string }>();
     const visible = document.querySelectorAll(
@@ -92,7 +118,7 @@ export async function extractMetadata(page: Page): Promise<PageMetadata> {
       const label = `${tag}${cls}`;
 
       const bg = cs.backgroundColor;
-      if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+      if (bg && !$color.isTransparent(bg)) {
         colorSet.set(`bg:${bg}`, { property: 'background-color', value: bg, element: label });
       }
       const fg = cs.color;
@@ -435,11 +461,11 @@ export function formatMetadata(meta: PageMetadata, opts: FormatOptions = {}): st
     if (compact) {
       // Convert rgb() to hex, group by role, limit to top 8
       const toHex = (rgb: string) => {
-        const m = rgb.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
+        const m = rgb.match(/rgba?\(\s*(\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)/);
         if (!m) return rgb;
         return (
           '#' +
-          [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])]
+          [Math.round(parseFloat(m[1])), Math.round(parseFloat(m[2])), Math.round(parseFloat(m[3]))]
             .map((c) => c.toString(16).padStart(2, '0'))
             .join('')
         );

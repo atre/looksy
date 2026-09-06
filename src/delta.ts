@@ -12,7 +12,7 @@ export interface DeltaSnapshot {
   elementCount: number;
   fonts: string[];
   cssVarCount: number;
-  colorPalette: string[];  // body bg + fg colors
+  colorPalette: string[]; // body bg + fg colors
   headingStructure: string; // "H1,H2,H2,H3" pattern
   contrastFailures: number;
   a11yIssueCount: number;
@@ -40,15 +40,22 @@ export async function captureDeltaSnapshot(page: Page, url: string): Promise<Del
       for (const sheet of document.styleSheets) {
         try {
           for (const rule of sheet.cssRules) {
-            if (rule instanceof CSSStyleRule && (rule.selectorText === ':root' || rule.selectorText === 'html')) {
+            if (
+              rule instanceof CSSStyleRule &&
+              (rule.selectorText === ':root' || rule.selectorText === 'html')
+            ) {
               for (const prop of rule.style) {
                 if (prop.startsWith('--')) cssVarCount++;
               }
             }
           }
-        } catch { /* cross-origin sheet */ }
+        } catch {
+          /* cross-origin sheet */
+        }
       }
-    } catch { /* styleSheets access error */ }
+    } catch {
+      /* styleSheets access error */
+    }
 
     // Body bg + fg color palette
     const bodyCs = getComputedStyle(document.body);
@@ -77,7 +84,11 @@ export async function captureDeltaSnapshot(page: Page, url: string): Promise<Del
 
     for (const input of document.querySelectorAll('input:not([type="hidden"]), textarea, select')) {
       const id = input.getAttribute('id');
-      if (!input.getAttribute('aria-label') && !input.getAttribute('aria-labelledby') && !(id && document.querySelector(`label[for="${id}"]`))) {
+      if (
+        !input.getAttribute('aria-label') &&
+        !input.getAttribute('aria-labelledby') &&
+        !(id && document.querySelector(`label[for="${id}"]`))
+      ) {
         a11yIssueCount++;
         break;
       }
@@ -88,7 +99,10 @@ export async function captureDeltaSnapshot(page: Page, url: string): Promise<Del
     let prevLevel = 0;
     for (const el of document.querySelectorAll('h1,h2,h3,h4,h5,h6')) {
       const level = parseInt(el.tagName[1]);
-      if (level > prevLevel + 1 && prevLevel > 0) { a11yIssueCount++; break; }
+      if (level > prevLevel + 1 && prevLevel > 0) {
+        a11yIssueCount++;
+        break;
+      }
       prevLevel = level;
     }
 
@@ -96,6 +110,27 @@ export async function captureDeltaSnapshot(page: Page, url: string): Promise<Del
     // Object method pattern to avoid named functions inside evaluate
     // (esbuild keepNames wraps standalone named bindings with __name() which breaks in browser context)
     const $ = {
+      ctx: document
+        .createElement('canvas')
+        .getContext('2d', { willReadFrequently: true, colorSpace: 'srgb' })!,
+      norm(c: string): string | null {
+        $.ctx.fillStyle = '#010203';
+        $.ctx.fillStyle = c;
+        const s = $.ctx.fillStyle;
+        if (s === '#010203' && c.replace(/\s/g, '').toLowerCase() !== '#010203') return null;
+        if (/^(#|rgba?\()/.test(s)) return s;
+        $.ctx.clearRect(0, 0, 1, 1);
+        $.ctx.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = $.ctx.getImageData(0, 0, 1, 1).data;
+        return a === 255
+          ? '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')
+          : `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+      },
+      isTransparent(raw: string): boolean {
+        if (raw === 'transparent' || raw === 'rgba(0, 0, 0, 0)') return true;
+        const n = $.norm(raw);
+        return !!n && /,\s*0\)$/.test(n);
+      },
       srgbLin(c: number): number {
         const s = c / 255;
         return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
@@ -104,7 +139,11 @@ export async function captureDeltaSnapshot(page: Page, url: string): Promise<Del
         return 0.2126 * $.srgbLin(r) + 0.7152 * $.srgbLin(g) + 0.0722 * $.srgbLin(b);
       },
       parseRgb(color: string): [number, number, number] | null {
-        const m = color.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
+        const n = $.norm(color);
+        if (!n) return null;
+        const hex = n.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i);
+        if (hex) return [parseInt(hex[1], 16), parseInt(hex[2], 16), parseInt(hex[3], 16)];
+        const m = n.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
         return m ? [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])] : null;
       },
     };
@@ -126,9 +165,12 @@ export async function captureDeltaSnapshot(page: Page, url: string): Promise<Del
       let cur: Element | null = el;
       while (cur) {
         const bgColor = getComputedStyle(cur).backgroundColor;
-        if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
+        if (bgColor && !$.isTransparent(bgColor)) {
           const parsed = $.parseRgb(bgColor);
-          if (parsed) { bg = parsed; break; }
+          if (parsed) {
+            bg = parsed;
+            break;
+          }
         }
         cur = cur.parentElement;
       }
@@ -218,7 +260,9 @@ export function compareDeltaSnapshots(before: DeltaSnapshot, after: DeltaSnapsho
   if (before.pageHeight !== after.pageHeight) {
     const delta = after.pageHeight - before.pageHeight;
     const pct = before.pageHeight > 0 ? ((delta / before.pageHeight) * 100).toFixed(1) : '0';
-    changes.push(`- pageHeight: ${before.pageHeight}px → ${after.pageHeight}px (${delta > 0 ? '+' : ''}${pct}%)`);
+    changes.push(
+      `- pageHeight: ${before.pageHeight}px → ${after.pageHeight}px (${delta > 0 ? '+' : ''}${pct}%)`,
+    );
   } else {
     unchanged.push('pageHeight');
   }
@@ -226,7 +270,9 @@ export function compareDeltaSnapshots(before: DeltaSnapshot, after: DeltaSnapsho
   // elementCount
   if (before.elementCount !== after.elementCount) {
     const delta = after.elementCount - before.elementCount;
-    changes.push(`- elementCount: ${before.elementCount} → ${after.elementCount} (${delta > 0 ? '+' : ''}${delta})`);
+    changes.push(
+      `- elementCount: ${before.elementCount} → ${after.elementCount} (${delta > 0 ? '+' : ''}${delta})`,
+    );
   } else {
     unchanged.push('elementCount');
   }
@@ -234,8 +280,8 @@ export function compareDeltaSnapshots(before: DeltaSnapshot, after: DeltaSnapsho
   // fonts
   const fontsBefore = new Set(before.fonts);
   const fontsAfter = new Set(after.fonts);
-  const addedFonts = [...fontsAfter].filter(f => !fontsBefore.has(f));
-  const removedFonts = [...fontsBefore].filter(f => !fontsAfter.has(f));
+  const addedFonts = [...fontsAfter].filter((f) => !fontsBefore.has(f));
+  const removedFonts = [...fontsBefore].filter((f) => !fontsAfter.has(f));
   if (addedFonts.length > 0 || removedFonts.length > 0) {
     const parts: string[] = [];
     if (removedFonts.length > 0) parts.push(`-${removedFonts.join(', ')}`);
@@ -248,7 +294,9 @@ export function compareDeltaSnapshots(before: DeltaSnapshot, after: DeltaSnapsho
   // cssVarCount
   if (before.cssVarCount !== after.cssVarCount) {
     const delta = after.cssVarCount - before.cssVarCount;
-    changes.push(`- cssVarCount: ${before.cssVarCount} → ${after.cssVarCount} (${delta > 0 ? '+' : ''}${delta})`);
+    changes.push(
+      `- cssVarCount: ${before.cssVarCount} → ${after.cssVarCount} (${delta > 0 ? '+' : ''}${delta})`,
+    );
   } else {
     unchanged.push('cssVars');
   }
@@ -257,7 +305,9 @@ export function compareDeltaSnapshots(before: DeltaSnapshot, after: DeltaSnapsho
   const paletteBefore = before.colorPalette.join('|');
   const paletteAfter = after.colorPalette.join('|');
   if (paletteBefore !== paletteAfter) {
-    changes.push(`- colorPalette: [${before.colorPalette.join(', ')}] → [${after.colorPalette.join(', ')}]`);
+    changes.push(
+      `- colorPalette: [${before.colorPalette.join(', ')}] → [${after.colorPalette.join(', ')}]`,
+    );
   } else {
     unchanged.push('colors');
   }
@@ -274,7 +324,9 @@ export function compareDeltaSnapshots(before: DeltaSnapshot, after: DeltaSnapsho
   // contrastFailures
   if (before.contrastFailures !== after.contrastFailures) {
     const delta = after.contrastFailures - before.contrastFailures;
-    changes.push(`- contrastFailures: ${before.contrastFailures} → ${after.contrastFailures} (${delta > 0 ? '+' : ''}${delta})`);
+    changes.push(
+      `- contrastFailures: ${before.contrastFailures} → ${after.contrastFailures} (${delta > 0 ? '+' : ''}${delta})`,
+    );
   } else {
     unchanged.push('contrast');
   }
@@ -282,7 +334,9 @@ export function compareDeltaSnapshots(before: DeltaSnapshot, after: DeltaSnapsho
   // a11yIssueCount
   if (before.a11yIssueCount !== after.a11yIssueCount) {
     const delta = after.a11yIssueCount - before.a11yIssueCount;
-    changes.push(`- a11y: ${before.a11yIssueCount} issue(s) → ${after.a11yIssueCount} issue(s) (${delta > 0 ? '+' : ''}${delta})`);
+    changes.push(
+      `- a11y: ${before.a11yIssueCount} issue(s) → ${after.a11yIssueCount} issue(s) (${delta > 0 ? '+' : ''}${delta})`,
+    );
   } else {
     unchanged.push('a11y');
   }

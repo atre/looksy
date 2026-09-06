@@ -1,9 +1,26 @@
 import type { Page } from 'playwright';
 
-function parseRgb(color: string): [number, number, number] | null {
-  const match = color.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
-  if (!match) return null;
-  return [parseInt(match[1]), parseInt(match[2]), parseInt(match[3])];
+/**
+ * Parse `#rrggbb`/`#rrggbbaa` or `rgb()`/`rgba()` (comma- or space-separated,
+ * as canvas normalisation emits) to [r, g, b]. Anything else (unnormalised
+ * CSS Color 4 syntax — oklch/lab/color()/hwb) returns null.
+ */
+export function parseRgb(color: string): [number, number, number] | null {
+  const hexMatch = color.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i);
+  if (hexMatch) {
+    return [parseInt(hexMatch[1], 16), parseInt(hexMatch[2], 16), parseInt(hexMatch[3], 16)];
+  }
+  const rgbMatch = color.match(
+    /rgba?\(\s*(\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)/,
+  );
+  if (rgbMatch) {
+    return [
+      Math.round(parseFloat(rgbMatch[1])),
+      Math.round(parseFloat(rgbMatch[2])),
+      Math.round(parseFloat(rgbMatch[3])),
+    ];
+  }
+  return null;
 }
 
 export function srgbToLinear(c: number): number {
@@ -58,6 +75,8 @@ export interface ContrastResult {
   total: number;
   /** True when the sample hit the limit and eligible candidates went unchecked. */
   capped: boolean;
+  /** Pairs whose fg/bg could not be parsed to RGB (unnormalised CSS Color 4 syntax). */
+  unparsed: number;
 }
 
 /**
@@ -82,6 +101,33 @@ export async function extractContrast(
       const selectors = 'h1,h2,h3,h4,h5,h6,p,a,button,span,li,td,th,label,div';
       let capped = false;
       let eligible = 0;
+
+      // Object method pattern to avoid named functions inside evaluate
+      // (esbuild keepNames wraps standalone named bindings with __name() which breaks in browser context)
+      const $ = {
+        ctx: document
+          .createElement('canvas')
+          .getContext('2d', { willReadFrequently: true, colorSpace: 'srgb' })!,
+        /** Canvas normalises any valid CSS colour (incl. oklch/lab/color()/hwb) to #rrggbb or rgba(r, g, b, a); null when unparseable. */
+        norm(c: string): string | null {
+          $.ctx.fillStyle = '#010203';
+          $.ctx.fillStyle = c;
+          const s = $.ctx.fillStyle;
+          if (s === '#010203' && c.replace(/\s/g, '').toLowerCase() !== '#010203') return null;
+          if (/^(#|rgba?\()/.test(s)) return s;
+          $.ctx.clearRect(0, 0, 1, 1);
+          $.ctx.fillRect(0, 0, 1, 1);
+          const [r, g, b, a] = $.ctx.getImageData(0, 0, 1, 1).data;
+          return a === 255
+            ? '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')
+            : `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+        },
+        isTransparent(raw: string): boolean {
+          if (raw === 'transparent' || raw === 'rgba(0, 0, 0, 0)') return true;
+          const n = $.norm(raw);
+          return !!n && /,\s*0\)$/.test(n);
+        },
+      };
 
       for (const el of document.querySelectorAll(selectors)) {
         const text = (el.textContent || '').trim().slice(0, 40);
@@ -137,7 +183,7 @@ export async function extractContrast(
         while (current) {
           const cs = getComputedStyle(current);
           const bgColor = cs.backgroundColor;
-          if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
+          if (bgColor && !$.isTransparent(bgColor)) {
             bg = bgColor;
             break;
           }
@@ -170,8 +216,10 @@ export async function extractContrast(
           tag: el.tagName.toLowerCase(),
           text,
           className: (el.getAttribute('class') || '').trim().slice(0, 100),
-          color: style.color,
-          bg,
+          // Normalise to what node-side parseRgb reads (#rrggbb/rgba); a null (unparseable)
+          // falls back to the raw string so node still counts it as unparsed rather than crashing.
+          color: $.norm(style.color) ?? style.color,
+          bg: $.norm(bg) ?? bg,
           fontSize: style.fontSize,
           fontWeight: style.fontWeight,
           source,
@@ -189,10 +237,14 @@ export async function extractContrast(
 
   // First pass: compute all ratios
   const results: ContrastPairResult[] = [];
+  let unparsed = 0;
   for (const p of pairs) {
     const fg = parseRgb(p.color);
     const bg = parseRgb(p.bg);
-    if (!fg || !bg) continue;
+    if (!fg || !bg) {
+      unparsed++;
+      continue;
+    }
 
     // Un-renderable pair: computed text color equals its resolved background. The element
     // renders no visible text in that color (inheriting wrapper, icon font, ::before), so the
@@ -248,6 +300,7 @@ export async function extractContrast(
     sampled,
     total,
     capped,
+    unparsed,
   };
 
   return { text: formatContrastText(results, { compact, capNote }), ...base };

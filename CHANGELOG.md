@@ -38,9 +38,12 @@ All notable changes to looksy are documented here. Format follows [Keep a Change
 - Responsive check reports an `AAA advisory (< 44px, not counted)` count next to the AA touch-target result
 - `--budget-samples <n>` — median-of-N budget gating (n ≥ 2, requires `--budget`); kills single-shot jitter against a CDN, reports min/median/max per metric
 - `--budget` keys that need an analyzer now imply it (`totalJS` → `--bundles`, `totalImages`/`imageCount` → `--images`); `totalCSS` is now actually measured (sum of external `.css` resources — was a dead key that always passed)
+- Page line `bg: dark|light` from the real body background
 
 ### Fixed
 
+- `--contrast`, `--report`, `--check` and `--design-spec` read CSS Color 4 values (oklch/oklab/lab/lch/color()/hwb, space-separated rgb) — an all-oklch page used to report `0 checked` and pass `--fail-on-aa`; unparsed colours are now counted and fail the gate
+- bare local filenames (`looksy Stage.dc.html`) open the file when it exists in cwd
 - Concurrent `looksy --html` invocations corrupted each other: stdin HTML was written to a shared `~/.looksy/_pipe.html`, so one process could capture another's page — the temp file is now per-process (`_pipe-<pid>.html`), and files older than 1 h left by killed processes are swept on the next `--html` run
 - A budgeted metric that was never computed passed vacuously against 0 (`--budget totalJS:200KB` without `--speed`/`--bundles` printed `Total JS: 0 B` and exited 0) — it now FAILs as `not measured`, which can flip previously-green CI invocations to exit 1
 - `--brief` alone exited 0 on a red result (e.g. HTTP 404) instead of 1 — any printed `✗` line now sets exit 1

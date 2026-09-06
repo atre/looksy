@@ -13,6 +13,20 @@ export function formatOverwriteNote(prevMtimeMs: number, nowMs: number): string 
   return `note: replaced previous default capture (written ${hh}:${mm}:${ss}, ${age} ago)`;
 }
 
+/**
+ * Pure gate predicate: an unparsed colour (unnormalisable CSS Color 4 syntax) fails the gate
+ * closed, exactly like an AA/AAA failure — a colour that can't be read is not a colour that
+ * passed.
+ */
+export function contrastGateFails(
+  f: { aa: number; aaa: number; unparsed?: number },
+  failAa: boolean,
+  failAaa: boolean,
+): boolean {
+  const unparsed = f.unparsed ?? 0;
+  return (failAa && (f.aa > 0 || unparsed > 0)) || (failAaa && (f.aaa > 0 || unparsed > 0));
+}
+
 /** Check contrast results: print failing elements to stderr and exit with code 1 if triggered */
 export function checkContrastExit(
   results: ScreenshotResult[],
@@ -22,12 +36,17 @@ export function checkContrastExit(
   let shouldExit = false;
   for (const r of results) {
     if (!r.contrastFailures) continue;
-    if (failAa && r.contrastFailures.aa > 0) shouldExit = true;
-    if (failAaa && r.contrastFailures.aaa > 0) shouldExit = true;
+    if (contrastGateFails(r.contrastFailures, failAa, failAaa)) shouldExit = true;
   }
   if (!shouldExit) return;
 
   // Print failing element details to stderr before exiting
+  for (const r of results) {
+    const unparsed = r.contrastFailures?.unparsed ?? 0;
+    if (unparsed > 0) {
+      console.error(`contrast: ${unparsed} colour(s) could not be parsed — gate fails closed`);
+    }
+  }
   for (const r of results) {
     if (!r.contrastPairs) continue;
     const aaFails = r.contrastPairs.filter((p) => !p.aaPass);
@@ -74,6 +93,7 @@ export function formatPageLine(result: ScreenshotResult): string | undefined {
   // scroll) but nobody notices unless they compare it to the flag they passed — say it.
   const over = viewportWidth ? formatOverflowFlag(width, viewportWidth) : '';
   const scheme = result.scheme ? ` · scheme: ${result.scheme}` : '';
+  const bg = result.bg ? ` · bg: ${result.bg}` : '';
   const scroll = result.scrollY ? ` · scrollY: ${result.scrollY}px` : '';
   const emu = result.pageInfo.emulation;
   const device = emu?.device
@@ -81,7 +101,7 @@ export function formatPageLine(result: ScreenshotResult): string | undefined {
     : emu?.hasTouch
       ? ' · touch'
       : '';
-  return `Page: ${width}x${height}px${device}${scheme}${scroll}${over}${title ? ` "${title}"` : ''}${timing}`;
+  return `Page: ${width}x${height}px${device}${scheme}${bg}${scroll}${over}${title ? ` "${title}"` : ''}${timing}`;
 }
 
 export function printResult(result: ScreenshotResult, opts: PrintOptions = {}): void {
@@ -161,7 +181,7 @@ export function printResult(result: ScreenshotResult, opts: PrintOptions = {}): 
  * real captures and lightweight test fixtures (missing most fields) satisfy it. */
 export interface BriefResult {
   pageInfo?: { width: number; height: number; title: string; viewportWidth?: number };
-  contrastFailures?: { aa: number; aaa: number; invisible?: number };
+  contrastFailures?: { aa: number; aaa: number; invisible?: number; unparsed?: number };
   checkResultsData?: CheckResult[];
   /** Set for a batch/fleet target whose capture failed outright (no result to inspect). */
   error?: string;

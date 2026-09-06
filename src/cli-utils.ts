@@ -101,6 +101,12 @@ export function resolveUrl(input: string): string {
     const addr = input.startsWith(':') ? `localhost${input}` : input;
     return `http://${addr}`;
   }
+  if (!input.includes('://')) {
+    const abs = resolve(input);
+    if (existsSync(abs) && statSync(abs).isFile()) {
+      return pathToFileURL(abs).href;
+    }
+  }
   if (input.startsWith('/') || input.startsWith('./') || input.startsWith('../')) {
     const abs = resolve(input);
     if (existsSync(abs)) {

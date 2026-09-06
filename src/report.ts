@@ -5,7 +5,11 @@ import type { Page } from 'playwright';
  * No screenshot needed — this is the cheapest verification mode.
  * Includes lightweight a11y and contrast checks automatically.
  */
-export async function generateReport(page: Page, viewport: { width: number; height: number }, pageUrl?: string): Promise<string> {
+export async function generateReport(
+  page: Page,
+  viewport: { width: number; height: number },
+  pageUrl?: string,
+): Promise<string> {
   const data = await page.evaluate((vpHeight: number) => {
     const title = document.title;
     const pageHeight = document.documentElement.scrollHeight;
@@ -16,7 +20,9 @@ export async function generateReport(page: Page, viewport: { width: number; heig
     const h3 = document.querySelectorAll('h3').length;
 
     // Sections
-    const sections = document.querySelectorAll('section, main, header, footer, nav, article, aside').length;
+    const sections = document.querySelectorAll(
+      'section, main, header, footer, nav, article, aside',
+    ).length;
 
     // Images
     const totalImages = document.querySelectorAll('img').length;
@@ -26,7 +32,10 @@ export async function generateReport(page: Page, viewport: { width: number; heig
     let brokenImages = 0;
     let pendingImages = 0;
     for (const img of document.querySelectorAll('img')) {
-      if (!img.complete) { pendingImages++; continue; }
+      if (!img.complete) {
+        pendingImages++;
+        continue;
+      }
       if (img.naturalWidth === 0 && (img.currentSrc || img.src)) brokenImages++;
     }
 
@@ -40,7 +49,9 @@ export async function generateReport(page: Page, viewport: { width: number; heig
     // Forms/inputs
     const forms = document.querySelectorAll('form').length;
     const inputs = document.querySelectorAll('input, textarea, select').length;
-    const buttons = document.querySelectorAll('button, [role="button"], input[type="submit"]').length;
+    const buttons = document.querySelectorAll(
+      'button, [role="button"], input[type="submit"]',
+    ).length;
 
     // Colors: body bg + text
     const bodyCs = getComputedStyle(document.body);
@@ -57,7 +68,9 @@ export async function generateReport(page: Page, viewport: { width: number; heig
     // Above-fold element count
     let aboveFold = 0;
     let belowFold = 0;
-    for (const el of document.querySelectorAll('h1, h2, h3, section, nav, header, footer, [class*="hero"], [class*="cta"], button')) {
+    for (const el of document.querySelectorAll(
+      'h1, h2, h3, section, nav, header, footer, [class*="hero"], [class*="cta"], button',
+    )) {
       const rect = el.getBoundingClientRect();
       if (rect.width < 10 || rect.height < 10) continue;
       if (rect.top < vpHeight) aboveFold++;
@@ -79,7 +92,12 @@ export async function generateReport(page: Page, viewport: { width: number; heig
     let unlabeledInputs = 0;
     for (const input of document.querySelectorAll('input:not([type="hidden"]), textarea, select')) {
       const id = input.getAttribute('id');
-      if (!input.getAttribute('aria-label') && !input.getAttribute('aria-labelledby') && !(id && document.querySelector(`label[for="${id}"]`))) unlabeledInputs++;
+      if (
+        !input.getAttribute('aria-label') &&
+        !input.getAttribute('aria-labelledby') &&
+        !(id && document.querySelector(`label[for="${id}"]`))
+      )
+        unlabeledInputs++;
     }
     if (unlabeledInputs > 0) a11yIssues.push(`${unlabeledInputs} unlabeled input(s)`);
 
@@ -101,6 +119,27 @@ export async function generateReport(page: Page, viewport: { width: number; heig
     // Object method pattern to avoid named functions inside evaluate
     // (esbuild keepNames wraps standalone named bindings with __name() which breaks in browser context)
     const $ = {
+      ctx: document
+        .createElement('canvas')
+        .getContext('2d', { willReadFrequently: true, colorSpace: 'srgb' })!,
+      norm(c: string): string | null {
+        $.ctx.fillStyle = '#010203';
+        $.ctx.fillStyle = c;
+        const s = $.ctx.fillStyle;
+        if (s === '#010203' && c.replace(/\s/g, '').toLowerCase() !== '#010203') return null;
+        if (/^(#|rgba?\()/.test(s)) return s;
+        $.ctx.clearRect(0, 0, 1, 1);
+        $.ctx.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = $.ctx.getImageData(0, 0, 1, 1).data;
+        return a === 255
+          ? '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')
+          : `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+      },
+      isTransparent(raw: string): boolean {
+        if (raw === 'transparent' || raw === 'rgba(0, 0, 0, 0)') return true;
+        const n = $.norm(raw);
+        return !!n && /,\s*0\)$/.test(n);
+      },
       srgbLin(c: number): number {
         const s = c / 255;
         return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
@@ -109,7 +148,11 @@ export async function generateReport(page: Page, viewport: { width: number; heig
         return 0.2126 * $.srgbLin(r) + 0.7152 * $.srgbLin(g) + 0.0722 * $.srgbLin(b);
       },
       parseRgb(color: string): [number, number, number] | null {
-        const m = color.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
+        const n = $.norm(color);
+        if (!n) return null;
+        const hex = n.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i);
+        if (hex) return [parseInt(hex[1], 16), parseInt(hex[2], 16), parseInt(hex[3], 16)];
+        const m = n.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
         return m ? [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])] : null;
       },
     };
@@ -132,9 +175,12 @@ export async function generateReport(page: Page, viewport: { width: number; heig
       let cur: Element | null = el;
       while (cur) {
         const bgColor = getComputedStyle(cur).backgroundColor;
-        if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
+        if (bgColor && !$.isTransparent(bgColor)) {
           const parsed = $.parseRgb(bgColor);
-          if (parsed) { bg = parsed; break; }
+          if (parsed) {
+            bg = parsed;
+            break;
+          }
         }
         cur = cur.parentElement;
       }
@@ -170,20 +216,31 @@ export async function generateReport(page: Page, viewport: { width: number; heig
             }
           }
         }
-      } catch { /* invalid JSON-LD */ }
+      } catch {
+        /* invalid JSON-LD */
+      }
     }
 
     return {
       title,
       pageHeight,
-      h1, h2, h3,
+      h1,
+      h2,
+      h3,
       sections,
-      totalImages, brokenImages, pendingImages,
-      totalLinks, externalLinks,
-      forms, inputs, buttons,
-      bodyBg, bodyColor,
+      totalImages,
+      brokenImages,
+      pendingImages,
+      totalLinks,
+      externalLinks,
+      forms,
+      inputs,
+      buttons,
+      bodyBg,
+      bodyColor,
       fonts: Array.from(fontSet),
-      aboveFold, belowFold,
+      aboveFold,
+      belowFold,
       a11yIssues,
       contrastFailures,
       contrastChecked,
@@ -194,14 +251,18 @@ export async function generateReport(page: Page, viewport: { width: number; heig
   const lines: string[] = [];
   lines.push(`# Report: ${data.title}`);
   if (pageUrl) lines.push(`URL: ${pageUrl}`);
-  lines.push(`Viewport: ${viewport.width}x${viewport.height} | Page: ${data.pageHeight}px | ${data.sections} sections`);
+  lines.push(
+    `Viewport: ${viewport.width}x${viewport.height} | Page: ${data.pageHeight}px | ${data.sections} sections`,
+  );
   lines.push(`Headings: ${data.h1} H1, ${data.h2} H2, ${data.h3} H3`);
   lines.push(`Fold: ${data.aboveFold} elements above, ${data.belowFold} below`);
   const imgNotes = [
     data.brokenImages > 0 ? `${data.brokenImages} broken` : '',
     data.pendingImages > 0 ? `${data.pendingImages} lazy/not loaded` : '',
   ].filter(Boolean);
-  lines.push(`Images: ${data.totalImages}${imgNotes.length ? ` (${imgNotes.join(', ')})` : ''} | Links: ${data.totalLinks} (${data.externalLinks} external)`);
+  lines.push(
+    `Images: ${data.totalImages}${imgNotes.length ? ` (${imgNotes.join(', ')})` : ''} | Links: ${data.totalLinks} (${data.externalLinks} external)`,
+  );
   lines.push(`Interactive: ${data.buttons} buttons, ${data.inputs} inputs, ${data.forms} forms`);
   lines.push(`Colors: bg=${data.bodyBg} text=${data.bodyColor}`);
   lines.push(`Fonts: ${data.fonts.join(', ')}`);
@@ -231,7 +292,9 @@ export async function generateReport(page: Page, viewport: { width: number; heig
 
   // Contrast summary
   if (data.contrastFailures > 0) {
-    lines.push(`Contrast: ${data.contrastFailures}/${data.contrastChecked} elements fail AA (run --contrast for details)`);
+    lines.push(
+      `Contrast: ${data.contrastFailures}/${data.contrastChecked} elements fail AA (run --contrast for details)`,
+    );
   } else {
     lines.push(`Contrast: all ${data.contrastChecked} elements pass AA`);
   }

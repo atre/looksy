@@ -6,7 +6,7 @@ const HELP_TEXT = `looksy — screenshot any URL for AI-assisted visual developm
 
 Usage:
   looksy <url> [options]          Screenshot a URL
-  looksy ./file.html              Screenshot a local file (auto-served via HTTP)
+  looksy ./file.html | file.html   Screenshot a local file (auto-served via HTTP)
   looksy save <url> <name>        Save screenshot as named baseline
   looksy diff <url> <name>        Compare URL against saved baseline
   looksy diff <a.png> <b.png>     Compare two local image files
@@ -71,8 +71,8 @@ Metadata & analysis:
   --limit <n|all>        Max offenders listed per section (touch targets, uncompressed,
                          no-cache, large bundles, images; default 10 / 5 in compact lists)
   --visible-only         Skip hidden elements in contrast checks
-  --fail-on-aa           Exit code 1 if any AA contrast failures
-  --fail-on-aaa          Exit code 1 if any AAA contrast failures
+  --fail-on-aa           Exit code 1 if any AA contrast failures (fails closed on unparsed colours)
+  --fail-on-aaa          Exit code 1 if any AAA contrast failures (fails closed on unparsed colours)
   --network              Network waterfall (top 15 slowest resources)
   --css-vars             Extract CSS custom properties from :root
   --fonts                Font loading verification

@@ -1,4 +1,4 @@
-import { suggestContrastFix, type ContrastPairResult } from './contrast.js';
+import { suggestContrastFix, parseRgb, type ContrastPairResult } from './contrast.js';
 
 export interface SuggestInput {
   contrastPairs?: ContrastPairResult[];
@@ -39,12 +39,6 @@ function listNames(names: string[] | undefined, max = 4): string {
   if (!names || names.length === 0) return '';
   const shown = names.slice(0, max);
   return ` (${shown.join(', ')}${names.length > max ? ', …' : ''})`;
-}
-
-function parseRgb(color: string): [number, number, number] | null {
-  const match = color.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
-  if (!match) return null;
-  return [parseInt(match[1]), parseInt(match[2]), parseInt(match[3])];
 }
 
 /**

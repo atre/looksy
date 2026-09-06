@@ -35,7 +35,8 @@ export function summarize(key: string, data: any, opts?: { limit?: number }): st
       const capped = data.capped && data.total > checked;
       const cov = capped ? `, ${data.total - checked} unchecked — raise with --contrast-limit` : '';
       const invisible = data.invisibleFailures ? `${data.invisibleFailures} invisible, ` : '';
-      return `contrast: ${invisible}${data.aaFailures} AA fail, ${data.aaaFailures} AAA fail (${checked} checked${cov})`;
+      const unparsed = data.unparsed ? `, ${data.unparsed} unparsed` : '';
+      return `contrast: ${invisible}${data.aaFailures} AA fail, ${data.aaaFailures} AAA fail (${checked} checked${unparsed}${cov})`;
     }
     case 'network':
       return `network: ${data.resources.length} resources, ${kb(data.totalSize)}, ${data.slowCount} slow`;
